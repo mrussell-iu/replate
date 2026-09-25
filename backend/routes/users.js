@@ -5,18 +5,16 @@ const bcrypt = require("bcrypt");
 const router = express.Router();
 
 router.post("/register", async (req, res) => {
-  const { organization_name, orgnization_type, address, name, email, password } = req.body;
+  const { organization_name, orgnaization_type, address, name, email, password } = req.body;
 
   if (!organization_name || !organization_type || !address || !email || !password ) {
     return res.status(400).json({ error: "All field are required."});
   }
 
-  if (organization_type !== "FOODSERVICE" && organization_type !== "RECIPIENT") {
+  if (organization_type !== "FOODDONOR" && organization_type !== "RECIPIENT") {
     return res.status(400).json({ error: "Role must be either 'donor' or 'recipient'."});
   }
-
-  const role = "FOOD_DONOR";
-
+  
   const connection = await pool.getConnection();
 
   try {
@@ -51,6 +49,8 @@ router.post("/register", async (req, res) => {
 
    await connection.commit();
    connection.release();
+
+  return res.status(201).json({ message: "User registered successfully."});
   } catch (error) {
   console.error("Registration Error:", error);
   return res.status(500).json({ error:"Internal server error."});
