@@ -5,40 +5,57 @@ const bcrypt = require("bcrypt");
 const router = express.Router();
 
 router.post("/register", async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { organization_name, orgnization_type, address, name, email, password } = req.body;
 
-  if (!name || !email || !password || !role) {
+  if (!organization_name || !organization_type || !address || !email || !password ) {
     return res.status(400).json({ error: "All field are required."});
   }
 
-  if (role !== "donor" && role !== "recipient") {
+  if (organization_type !== "FOODSERVICE" && organization_type !== "RECIPIENT") {
     return res.status(400).json({ error: "Role must be either 'donor' or 'recipient'."});
   }
 
+  const role = "FOOD_DONOR";
+
+  const connection = await pool.getConnection();
+
   try {
-    const [existingUser] = await pool.query(
+    await connection.beginTransaction();
+    
+    const [existingUser] = await connection.query(
       "SELECT email FROM users WHERE email = ?",
       [email]
       );
 
+    if (existingUser.length > 0) {
+      connection.release();
+      return res.status(400).json({ error: "Email is already in use."});
+    }
+
   const saltRounds = 10;
   const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-  const [result] = await pool.query(
-    "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
-    [name, email, hashedPassword, role]
-    );
+  const insertQuery =
+    INSERT INTO users (organization_name, organization_type, address, name, email, password) 
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ;
 
-    res.status(201).json({
-      message: "Account created successfully!",
-      userId: result.insertId,
-      role: role
-    });
+  await connection.query(insertQuery, [
+    organization_name,
+    organization_type,
+    address,
+    name,
+    email,
+    hashedPassword
+    ]);
+
+   await connection.commit();
+   connection.release();
   } catch (error) {
-    console.error(error) {
-    res.status(500).json({ error: "Unable to create an account."});
-    }
-  });
+  console.error("Registration Error:", error);
+  return res.status(500).json({ error:"Internal server error."});
+}
+    });
 
 module.exports = router;
     
