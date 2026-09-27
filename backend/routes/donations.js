@@ -3,7 +3,7 @@ const pool = require("../config/db");
 
 const router = express.Router();
 
-//Retrieve Donation Listings 
+// Retrieve Donation Listings
 router.get("/", async (req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -24,14 +24,15 @@ router.get("/", async (req, res) => {
 
     res.json(rows);
   } catch (error) {
-    console.error(error);
+    console.error("Error retrieving donations:", error);
+
     res.status(500).json({
       error: "Unable to retrieve donations."
     });
   }
 });
 
-//Create Donation Entry 
+// Create Donation Entry
 router.post("/", async (req, res) => {
   try {
     const {
@@ -94,7 +95,7 @@ router.post("/", async (req, res) => {
       donation_id: result.insertId
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error saving donation:", error);
 
     res.status(500).json({
       error: "Unable to save donation."
@@ -102,25 +103,26 @@ router.post("/", async (req, res) => {
   }
 });
 
-//Update Existing Donation Listing 
-router.put('/:id', async (req, es) => {
+// Update Existing Donation Listing
+router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const {
-        food_type,
-        quantity,
-        quantity_unit,
-        pickup_address,
-        pickup_date,
-        pickup_time,
-        claim_deadline,
-        additional_information,
-        status
-  } + req.body;
 
-  try { 
-    const query =
+  const {
+    food_type,
+    quantity,
+    quantity_unit,
+    pickup_address,
+    pickup_date,
+    pickup_time,
+    claim_deadline,
+    additional_information,
+    status
+  } = req.body;
+
+  try {
+    const query = `
       UPDATE donations
-      SET 
+      SET
         food_type = ?,
         quantity = ?,
         quantity_unit = ?,
@@ -130,47 +132,69 @@ router.put('/:id', async (req, es) => {
         claim_deadline = ?,
         additional_information = ?,
         status = ?
-    WHERE id = ?
-  ;
-    const [result] = await pool.query(query, [
-       food_type,
-        quantity,
-        quantity_unit,
-        pickup_address,
-        pickup_date,
-        pickup_time,
-        claim_deadline,
-        additional_information || null,
-        status,
-        id
-      ]);
-    if (result.affectedRows === 0) {
-          return res.status(404).json({ error: 'Donation listing not found.' });
-          }
-    res.json({ message: 'Donation listing updated successfully.' });
-  } catch (error) {
-    console.error('Error updating donation:', error);
-          res.status(500).json({error: 'Database server error. '});
-          }
-          });
+      WHERE donation_id = ?
+    `;
 
-//Delete Existing Donation Listing 
-router.delete('/:id', async (req, res) => {
-          const { id } = req.params;
+    const [result] = await pool.query(query, [
+      food_type,
+      quantity,
+      quantity_unit,
+      pickup_address,
+      pickup_date,
+      pickup_time,
+      claim_deadline,
+      additional_information || null,
+      status,
+      id
+    ]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        error: "Donation listing not found."
+      });
+    }
+
+    res.json({
+      message: "Donation listing updated successfully."
+    });
+  } catch (error) {
+    console.error("Error updating donation:", error);
+
+    res.status(500).json({
+      error: "Database server error."
+    });
+  }
+});
+
+// Delete Existing Donation Listing
+router.delete("/:id", async (req, res) => {
+  const { id } = req.params;
 
   try {
-    const query = 'DELETE FROM donations WHERE id = ?';
+    const query =
+      "DELETE FROM donations WHERE donation_id = ?";
+
     const [result] = await pool.query(query, [id]);
 
     if (result.affectedRows === 0) {
-          return res.status(404).json({ error: 'Donation listing not found.' });
+      return res.status(404).json({
+        error: "Donation listing not found."
+      });
     }
-    res.json({message: 'Donation listing deleted successfully.' });
-      } catch (error) {
-          console.error('Error deleting donation:', error);
-          res.status(500).json({error: 'Database server error.' });
-}
+
+    res.json({
+      message: "Donation listing deleted successfully."
+    });
+  } catch (error) {
+    console.error("Error deleting donation:", error);
+
+    res.status(500).json({
+      error: "Database server error."
+    });
+  }
 });
+
+module.exports = router;
           
       
           
