@@ -24,10 +24,13 @@ router.put("/:id/claim", async (req, res) => {
       return res.status(400).json({ error: "This donation has already been claimed."});
     }
 
-    await db.query(
+   const [result] await db.query(
       "UPDATE donations SET status = 'CLAIMED', recipient_id = ? WHERE donation_id = ?",
       [recipientUserId, donationId]
       );
+    if (result.affectedRows === 0){
+return res.status(400).json({ error: "Donation listing is unavailable."});
+}
     
    return res.status(200).json({ message: "Donation successfully claimed!"});
 
