@@ -1,30 +1,27 @@
 const express = require("express");
-const pool = require("../config/db");
+const donationRepository = require("../repositories/donationRepository");
 
 const router = express.Router();
 
+<<<<<<< HEAD
 // Retrieve Donation Listings
+=======
+/*
+ * GET /api/donations
+ * Returns currently available donations.
+ */
+>>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
 router.get("/", async (req, res) => {
   try {
-    const [rows] = await pool.query(`
-      SELECT
-        donation_id,
-        food_type,
-        quantity,
-        quantity_unit,
-        pickup_address,
-        pickup_date,
-        pickup_time,
-        claim_deadline,
-        additional_information,
-        status
-      FROM donations
-      ORDER BY created_at DESC
-    `);
+    const donations = await donationRepository.findAvailable();
 
-    res.json(rows);
+    res.json(donations);
   } catch (error) {
+<<<<<<< HEAD
     console.error("Error retrieving donations:", error);
+=======
+    console.error("GET /api/donations failed:", error);
+>>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
 
     res.status(500).json({
       error: "Unable to retrieve donations."
@@ -32,7 +29,14 @@ router.get("/", async (req, res) => {
   }
 });
 
+<<<<<<< HEAD
 // Create Donation Entry
+=======
+/*
+ * POST /api/donations
+ * Creates a new food donation.
+ */
+>>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
 router.post("/", async (req, res) => {
   try {
     const {
@@ -46,9 +50,10 @@ router.post("/", async (req, res) => {
       additional_information
     } = req.body;
 
+    // Check that all required fields were provided.
     if (
       !food_type ||
-      !quantity ||
+      quantity === undefined ||
       !quantity_unit ||
       !pickup_address ||
       !pickup_date ||
@@ -60,42 +65,52 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const [result] = await pool.query(
-      `
-      INSERT INTO donations
-      (
-        organization_id,
-        food_type,
-        quantity,
-        quantity_unit,
-        pickup_address,
-        pickup_date,
-        pickup_time,
-        claim_deadline,
-        additional_information,
-        status
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE')
-      `,
-      [
-        1,
-        food_type,
-        quantity,
-        quantity_unit,
-        pickup_address,
-        pickup_date,
-        pickup_time,
-        claim_deadline,
-        additional_information || null
-      ]
-    );
+    // Quantity must be a positive number.
+    const numericQuantity = Number(quantity);
+
+    if (!Number.isFinite(numericQuantity) || numericQuantity <= 0) {
+      return res.status(400).json({
+        error: "Quantity must be a positive number."
+      });
+    }
+
+    // Claim deadline must be a valid date/time in the future.
+    const deadline = new Date(claim_deadline);
+
+    if (Number.isNaN(deadline.getTime()) || deadline <= new Date()) {
+      return res.status(400).json({
+        error: "Claim deadline must be in the future."
+      });
+    }
+
+    /*
+     * organization_id is temporarily set to 1 for development.
+     * Once authentication is added, this should come from the
+     * logged-in user's organization.
+     */
+    const donationId = await donationRepository.insertDonation({
+      organization_id: 1,
+      recipient_user_id: null,
+      food_type,
+      quantity: numericQuantity,
+      quantity_unit,
+      pickup_address,
+      pickup_date,
+      pickup_time,
+      claim_deadline,
+      additional_information
+    });
 
     res.status(201).json({
       message: "Donation posted successfully.",
-      donation_id: result.insertId
+      donation_id: donationId
     });
   } catch (error) {
+<<<<<<< HEAD
     console.error("Error saving donation:", error);
+=======
+    console.error("POST /api/donations failed:", error);
+>>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
 
     res.status(500).json({
       error: "Unable to save donation."
@@ -103,6 +118,7 @@ router.post("/", async (req, res) => {
   }
 });
 
+<<<<<<< HEAD
 // Update Existing Donation Listing
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
@@ -136,6 +152,17 @@ router.put("/:id", async (req, res) => {
     `;
 
     const [result] = await pool.query(query, [
+=======
+/*
+ * PUT /api/donations/:id
+ * Updates only the fields that are included in the request.
+ */
+router.put("/:id", async (req, res) => {
+  try {
+    const donationId = req.params.id;
+
+    const {
+>>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
       food_type,
       quantity,
       quantity_unit,
@@ -143,6 +170,7 @@ router.put("/:id", async (req, res) => {
       pickup_date,
       pickup_time,
       claim_deadline,
+<<<<<<< HEAD
       additional_information || null,
       status,
       id
@@ -151,10 +179,86 @@ router.put("/:id", async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         error: "Donation listing not found."
+=======
+      additional_information,
+      status
+    } = req.body;
+
+    const updates = {};
+
+    if (food_type !== undefined) {
+      updates.food_type = food_type;
+    }
+
+    if (quantity !== undefined) {
+      const numericQuantity = Number(quantity);
+
+      if (!Number.isFinite(numericQuantity) || numericQuantity <= 0) {
+        return res.status(400).json({
+          error: "Quantity must be a positive number."
+        });
+      }
+
+      updates.quantity = numericQuantity;
+    }
+
+    if (quantity_unit !== undefined) {
+      updates.quantity_unit = quantity_unit;
+    }
+
+    if (pickup_address !== undefined) {
+      updates.pickup_address = pickup_address;
+    }
+
+    if (pickup_date !== undefined) {
+      updates.pickup_date = pickup_date;
+    }
+
+    if (pickup_time !== undefined) {
+      updates.pickup_time = pickup_time;
+    }
+
+    if (claim_deadline !== undefined) {
+      const deadline = new Date(claim_deadline);
+
+      if (Number.isNaN(deadline.getTime()) || deadline <= new Date()) {
+        return res.status(400).json({
+          error: "Claim deadline must be in the future."
+        });
+      }
+
+      updates.claim_deadline = claim_deadline;
+    }
+
+    if (additional_information !== undefined) {
+      updates.additional_information = additional_information;
+    }
+
+    if (status !== undefined) {
+      updates.status = status;
+    }
+
+    // Do not run an empty update.
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        error: "No fields were provided to update."
+      });
+    }
+
+    const affectedRows = await donationRepository.updateDonation(
+      donationId,
+      updates
+    );
+
+    if (affectedRows === 0) {
+      return res.status(404).json({
+        error: "Donation not found."
+>>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
       });
     }
 
     res.json({
+<<<<<<< HEAD
       message: "Donation listing updated successfully."
     });
   } catch (error) {
@@ -162,10 +266,20 @@ router.put("/:id", async (req, res) => {
 
     res.status(500).json({
       error: "Database server error."
+=======
+      message: "Donation updated successfully."
+    });
+  } catch (error) {
+    console.error("PUT /api/donations/:id failed:", error);
+
+    res.status(500).json({
+      error: "Unable to update donation."
+>>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
     });
   }
 });
 
+<<<<<<< HEAD
 // Delete Existing Donation Listing
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
@@ -199,3 +313,6 @@ module.exports = router;
       
           
 module.exports = router;
+=======
+module.exports = router;
+>>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
