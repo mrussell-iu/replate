@@ -38,33 +38,6 @@ async function insertDonation(donation) {
     additional_information
   } = donation;
 
-  async function updateDonation(donationId, updates) {
-  const fields = [];
-  const values = [];
-
-  for (const [field, value] of Object.entries(updates)) {
-    fields.push(`${field} = ?`);
-    values.push(value);
-  }
-
-  if (fields.length === 0) {
-    return 0;
-  }
-
-  values.push(donationId);
-
-  const [result] = await pool.query(
-    `
-    UPDATE donations
-    SET ${fields.join(", ")}
-    WHERE donation_id = ?
-    `,
-    values
-  );
-
-  return result.affectedRows;
-}
-
   const [result] = await pool.query(
     `
     INSERT INTO donations (
@@ -97,6 +70,33 @@ async function insertDonation(donation) {
   );
 
   return result.insertId;
+}
+
+async function updateDonation(donationId, updates) {
+  const fields = [];
+  const values = [];
+
+  for (const [field, value] of Object.entries(updates)) {
+    fields.push(`${field} = ?`);
+    values.push(value);
+  }
+
+  if (fields.length === 0) {
+    return 0;
+  }
+
+  values.push(donationId);
+
+  const [result] = await pool.query(
+    `
+    UPDATE donations
+    SET ${fields.join(", ")}
+    WHERE donation_id = ?
+    `,
+    values
+  );
+
+  return result.affectedRows;
 }
 
 module.exports = {
