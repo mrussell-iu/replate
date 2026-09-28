@@ -1,0 +1,40 @@
+const express = require("express");
+const router = express.Router();
+const db = require("../db");
+
+router.put("/:id/claim", async (req, res) => {
+  const donationId = req.params.id;
+  const { recipientUserId } = req.body; 
+
+    if (!recipientUserId) {
+        return res.status(400).json({ error: "User ID is required to claim this listing." });
+  }
+
+  try {
+    const [rows] = await db.query(
+      "SELECT status FROM donations WHERE donation_id = ?",
+      [donationId]
+      );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Donation listing not found." });
+    }
+
+    if (rows[0].status !== "AVAILABLE") {
+      return res.status(400).json({ error: "This donation has already been claimed."});
+    }
+
+    await db.query(
+      "UPDATE donations SET status = 'CLAIMED', recipient_id = ? WHERE donation_id = ?",
+      [recipientUserId, donationId]
+      );
+    
+   return res.status(200).json({ message: "Donation successfully claimed!"});
+
+  } catch (error) {
+        console.error("Error claiming donation:" error);
+        res.status(500).json({ error:Internal server error occured while claiming the donation." });
+          }
+                             });
+    module.exports = router;
+  
