@@ -38,3 +38,7 @@ CREATE TABLE IF NOT EXISTS donations (
         FOREIGN KEY (organization_id)
         REFERENCES organizations(organization_id)
 );
+ALTER TABLE donations
+ADD COLUMN status ENUM('AVAILABLE', 'CLAIMED', 'COMPLETED') DEFAULT 'AVAILABLE',
+ADD COLUMN recipient_user_id INT NULL,
+ADD CONSTRAINT fk_donations_recipient FOREIGN KEY (recipient_user_id) REFERENCES users(user_id);
