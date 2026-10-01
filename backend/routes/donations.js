@@ -152,7 +152,7 @@ router.put("/:id", async (req, res) => {
       pickup_date,
       pickup_time,
       claim_deadline,
-      additional_information || null,
+      additional_information = null,
       status,
       id
     ]);
