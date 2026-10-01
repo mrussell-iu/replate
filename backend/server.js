@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-require("dontenv").config();
+require("dotenv").config();
 
 const userRoutes = require("./routes/users");
 const donationRoutes = require("./routes/donations");
