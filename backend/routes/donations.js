@@ -13,7 +13,6 @@ router.get("/", async (req, res) => {
   } catch (error) {
 /* Error - unable to retrieve donations */
     console.error("Error retrieving donations:", error);
-=======
     console.error("GET /api/donations failed:", error);
 
     res.status(500).json({
@@ -96,7 +95,6 @@ router.post("/", async (req, res) => {
   } catch (error) {
 /*Error - Unable to save donation*/
     console.error("Error saving donation:", error);
-=======
     console.error("POST /api/donations failed:", error);
 
     res.status(500).json({
