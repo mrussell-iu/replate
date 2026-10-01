@@ -3,25 +3,18 @@ const donationRepository = require("../repositories/donationRepository");
 
 const router = express.Router();
 
-<<<<<<< HEAD
-// Retrieve Donation Listings
-=======
-/*
- * GET /api/donations
- * Returns currently available donations.
- */
->>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
+/* GET /api/donations
+ * Returns currently available donations.*/
 router.get("/", async (req, res) => {
   try {
     const donations = await donationRepository.findAvailable();
 
     res.json(donations);
   } catch (error) {
-<<<<<<< HEAD
+/* Error - unable to retrieve donations */
     console.error("Error retrieving donations:", error);
 =======
     console.error("GET /api/donations failed:", error);
->>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
 
     res.status(500).json({
       error: "Unable to retrieve donations."
@@ -29,14 +22,9 @@ router.get("/", async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
-// Create Donation Entry
-=======
-/*
- * POST /api/donations
- * Creates a new food donation.
- */
->>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
+/* POST /api/donations
+ * Creates a new food donation.*/
+
 router.post("/", async (req, res) => {
   try {
     const {
@@ -106,11 +94,10 @@ router.post("/", async (req, res) => {
       donation_id: donationId
     });
   } catch (error) {
-<<<<<<< HEAD
+/*Error - Unable to save donation*/
     console.error("Error saving donation:", error);
 =======
     console.error("POST /api/donations failed:", error);
->>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
 
     res.status(500).json({
       error: "Unable to save donation."
@@ -118,7 +105,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
 // Update Existing Donation Listing
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
@@ -152,7 +138,6 @@ router.put("/:id", async (req, res) => {
     `;
 
     const [result] = await pool.query(query, [
-=======
 /*
  * PUT /api/donations/:id
  * Updates only the fields that are included in the request.
@@ -162,7 +147,6 @@ router.put("/:id", async (req, res) => {
     const donationId = req.params.id;
 
     const {
->>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
       food_type,
       quantity,
       quantity_unit,
@@ -170,7 +154,6 @@ router.put("/:id", async (req, res) => {
       pickup_date,
       pickup_time,
       claim_deadline,
-<<<<<<< HEAD
       additional_information || null,
       status,
       id
@@ -179,7 +162,6 @@ router.put("/:id", async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({
         error: "Donation listing not found."
-=======
       additional_information,
       status
     } = req.body;
@@ -253,12 +235,10 @@ router.put("/:id", async (req, res) => {
     if (affectedRows === 0) {
       return res.status(404).json({
         error: "Donation not found."
->>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
       });
     }
 
     res.json({
-<<<<<<< HEAD
       message: "Donation listing updated successfully."
     });
   } catch (error) {
@@ -266,7 +246,6 @@ router.put("/:id", async (req, res) => {
 
     res.status(500).json({
       error: "Database server error."
-=======
       message: "Donation updated successfully."
     });
   } catch (error) {
@@ -274,12 +253,10 @@ router.put("/:id", async (req, res) => {
 
     res.status(500).json({
       error: "Unable to update donation."
->>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
     });
   }
 });
 
-<<<<<<< HEAD
 // Delete Existing Donation Listing
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
