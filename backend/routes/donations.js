@@ -155,7 +155,7 @@ router.put("/:id", async (req, res) => {
       additional_information = null,
       status,
       id
-    });
+    } = req.body;
 
     if (result.affectedRows === 0) {
       return res.status(404).json({
