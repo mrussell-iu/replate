@@ -99,8 +99,20 @@ async function updateDonation(donationId, updates) {
   return result.affectedRows;
 }
 
+async function deleteDonation(donationId) {
+  const [result] = await pool.query(
+    `DELETE FROM donations WHERE donation_id = ?`,
+    [donationId]
+    );
+
+  return result.affectedRows;
+
+}
+    
+
 module.exports = {
   findAvailable,
   insertDonation,
-  updateDonation
+  updateDonation,
+  deleteDonation
 };
