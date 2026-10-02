@@ -225,7 +225,7 @@ router.put("/:id", async (req, res) => {
         error: "No fields were provided to update."
       });
     }
-
+try {
     const result = await donationRepository.updateDonation(
       donationId,
       updates
@@ -243,13 +243,7 @@ router.put("/:id", async (req, res) => {
   } catch (error) {
     console.error("Error updating donation:", error);
 
-    res.status(500).json({
-      error: "Unable to update donation."
-    });
-  } catch (error) {
-    console.error("PUT /api/donations/:id failed:", error);
-
-    res.status(500).json({
+    return res.status(500).json({
       error: "Unable to update donation."
     });
   }
