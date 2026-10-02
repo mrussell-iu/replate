@@ -159,10 +159,11 @@ router.put("/:id", async (req, res) => {
 
     if (result.affectedRows === 0) {
       return res.status(404).json({
-        error: "Donation listing not found."
+        error: "Donation listing not found.",
       additional_information,
       status
-    } = req.body;
+    });
+    }
 
     const updates = {};
 
@@ -225,7 +226,7 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    const affectedRows = await donationRepository.updateDonation(
+    const result = await donationRepository.updateDonation(
       donationId,
       updates
     );
@@ -236,15 +237,14 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    res.json({
+   return res.json({
       message: "Donation listing updated successfully."
     });
   } catch (error) {
     console.error("Error updating donation:", error);
 
     res.status(500).json({
-      error: "Database server error."
-      message: "Donation updated successfully."
+      error: "Unable to update donation."
     });
   } catch (error) {
     console.error("PUT /api/donations/:id failed:", error);
@@ -284,10 +284,4 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
-          
-      
-          
-module.exports = router;
-=======
-module.exports = router;
->>>>>>> 67c1c11 (Fix Assignment 4 repository feedback)
+
