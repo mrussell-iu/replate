@@ -14,7 +14,7 @@ router.get("/", async (req, res) => {
 /* Error - unable to retrieve donations */
     console.error("GET /api/donations failed:", error);
 
-    res.status(500).json({
+   return res.status(500).json({
       error: "Unable to retrieve donations."
     });
   }
@@ -120,7 +120,7 @@ router.put("/:id", async (req, res) => {
     const updates = {};`
 
     if (food_type !== undefined) updates.food_type = food_type;
-}
+    
     if (quantity !== undefined) {
       const numericQuantity = Number(quantity);
       
@@ -135,16 +135,12 @@ router.put("/:id", async (req, res) => {
 
     if (quantity_unit !== undefined)
     updates.quantity_unit = quantity_unit;
-    }
     if (pickup_address !== undefined) { 
     updates.pickup_address = pickup_address;
-    }
     if (pickup_date !== undefined) {
     updates.pickup_date = pickup_date;
-    }
     if (pickup_time !== undefined) {
       updates.pickup_time = pickup_time;
-      }
     if (claim_deadline !== undefined) {
       const deadline = new Date(claim_deadline);
     if (Number.isNaN(deadline.getTime()) || deadline <= new Date()) {
@@ -160,9 +156,16 @@ router.put("/:id", async (req, res) => {
       updates.additional_information = additional_information;
     }
 
-    if (status !== undefined)
+    if (status !== undefined){
+      const vaidStatuses = ["AVAILABLE", "CLAIMED", "COMPLETED"];
+    if (!validStatuses.includes(status)){
+    return res.status(400).json({
+      error:"Status must be one of AVAILABLE, CLAIMED, or COMPLETED."
+      });
+      }
       updates.status = status;
-    }
+      }
+      
     // Do not run an empty update.
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({
@@ -174,7 +177,7 @@ router.put("/:id", async (req, res) => {
       updates
     );
 
-    if (result.affectedRows === 0) {
+    if (result === 0) {
       return res.status(404).json({
         error: "Donation not found."
       });
@@ -198,7 +201,7 @@ router.delete("/:id", async (req, res) => {
   try {
     const result = await donationRepository.deleteDonation(req.params.id);
 
-    if (result.affectedRows === 0) {
+    if (result === 0) {
       return res.status(404).json({
         error: "Donation listing not found."
       });
