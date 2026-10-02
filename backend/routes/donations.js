@@ -9,10 +9,9 @@ router.get("/", async (req, res) => {
   try {
     const donations = await donationRepository.findAvailable();
 
-    res.json(donations);
+  return res.json(donations);
   } catch (error) {
 /* Error - unable to retrieve donations */
-    console.error("Error retrieving donations:", error);
     console.error("GET /api/donations failed:", error);
 
     res.status(500).json({
@@ -88,16 +87,15 @@ router.post("/", async (req, res) => {
       additional_information
     });
 
-    res.status(201).json({
+  return res.status(201).json({
       message: "Donation posted successfully.",
       donation_id: donationId
     });
   } catch (error) {
 /*Error - Unable to save donation*/
-    console.error("Error saving donation:", error);
     console.error("POST /api/donations failed:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Unable to save donation."
     });
   }
@@ -105,8 +103,8 @@ router.post("/", async (req, res) => {
 
 // Update Existing Donation Listing
 router.put("/:id", async (req, res) => {
-  const { id } = req.params;
-
+  try {
+  const donationId = req.params.id;
   const {
     food_type,
     quantity,
@@ -119,57 +117,9 @@ router.put("/:id", async (req, res) => {
     status
   } = req.body;
 
-  try {
-    const query = `
-      UPDATE donations
-      SET
-        food_type = ?,
-        quantity = ?,
-        quantity_unit = ?,
-        pickup_address = ?,
-        pickup_date = ?,
-        pickup_time = ?,
-        claim_deadline = ?,
-        additional_information = ?,
-        status = ?
-      WHERE donation_id = ?
-    `;
+    const updates = {};`
 
-    const [result] = await pool.query(query, [
-/*
- * PUT /api/donations/:id
- * Updates only the fields that are included in the request.
- */
-router.put("/:id", async (req, res) => {
-  try {
-    const donationId = req.params.id;
-
-    const {
-      food_type,
-      quantity,
-      quantity_unit,
-      pickup_address,
-      pickup_date,
-      pickup_time,
-      claim_deadline,
-      additional_information = null,
-      status,
-      id
-    } = req.body;
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
-        error: "Donation listing not found.",
-      additional_information,
-      status
-    });
-    }
-
-    const updates = {};
-
-    if (food_type !== undefined) {
-      updates.food_type = food_type;
-    }
+    if (food_type !== undefined) updates.food_type = food_type;
 
     if (quantity !== undefined) {
       const numericQuantity = Number(quantity);
@@ -183,26 +133,17 @@ router.put("/:id", async (req, res) => {
       updates.quantity = numericQuantity;
     }
 
-    if (quantity_unit !== undefined) {
-      updates.quantity_unit = quantity_unit;
-    }
-
-    if (pickup_address !== undefined) {
-      updates.pickup_address = pickup_address;
-    }
-
+    if (quantity_unit !== undefined)
+    updates.quantity_unit = quantity_unit;
+    if (pickup_address !== undefined) { 
+    updates.pickup_address = pickup_address;
     if (pickup_date !== undefined) {
-      updates.pickup_date = pickup_date;
-    }
-
+    updates.pickup_date = pickup_date;
     if (pickup_time !== undefined) {
       updates.pickup_time = pickup_time;
-    }
-
     if (claim_deadline !== undefined) {
       const deadline = new Date(claim_deadline);
-
-      if (Number.isNaN(deadline.getTime()) || deadline <= new Date()) {
+    if (Number.isNaN(deadline.getTime()) || deadline <= new Date()) {
         return res.status(400).json({
           error: "Claim deadline must be in the future."
         });
@@ -215,17 +156,15 @@ router.put("/:id", async (req, res) => {
       updates.additional_information = additional_information;
     }
 
-    if (status !== undefined) {
+    if (status !== undefined)
       updates.status = status;
-    }
 
     // Do not run an empty update.
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({
         error: "No fields were provided to update."
       });
-    }
-try {
+      
     const result = await donationRepository.updateDonation(
       donationId,
       updates
@@ -241,7 +180,7 @@ try {
       message: "Donation listing updated successfully."
     });
   } catch (error) {
-    console.error("Error updating donation:", error);
+    console.error("PUT /api/donations/:id failed:", error);
 
     return res.status(500).json({
       error: "Unable to update donation."
@@ -251,13 +190,9 @@ try {
 
 // Delete Existing Donation Listing
 router.delete("/:id", async (req, res) => {
-  const { id } = req.params;
 
   try {
-    const query =
-      "DELETE FROM donations WHERE donation_id = ?";
-
-    const [result] = await pool.query(query, [id]);
+    const result = await donationRepository.deleteDonation(req.params.id);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({
@@ -265,13 +200,13 @@ router.delete("/:id", async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       message: "Donation listing deleted successfully."
     });
   } catch (error) {
-    console.error("Error deleting donation:", error);
+    console.error("DELETE /api/donations/:id failed:", error);
 
-    res.status(500).json({
+   return res.status(500).json({
       error: "Database server error."
     });
   }
