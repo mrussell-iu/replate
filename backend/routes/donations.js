@@ -147,7 +147,7 @@ router.put("/api/donations/:id", async (req, res) => {
     }
     if (claim_deadline !== undefined) {
       const deadline = new Date(claim_deadline);
-    }
+  
     if (Number.isNaN(deadline.getTime()) || deadline <= new Date()) {
         return res.status(400).json({
           error: "Claim deadline must be in the future."
