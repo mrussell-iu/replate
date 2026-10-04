@@ -226,7 +226,6 @@ router.delete("api/donations/:id", async (req, res) => {
       error: "Database server error."
     });
   }
-});
-
+  });
 module.exports = router;
 
