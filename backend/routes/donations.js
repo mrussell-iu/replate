@@ -233,7 +233,7 @@ router.get("/search", async (req, res) => {
  try {
   const { food_type, location, status, organization_id } = req.query;
   
-  let query = 
+  let query = `
    SELECT 
     d.donation_id,
     d.food_type,
@@ -250,8 +250,9 @@ router.get("/search", async (req, res) => {
     o.organization_type
   FROM donations d 
   JOIN organizations o ON d.organization_id = o.organization_id
-  WHERE 1=1;
-  
+  WHERE 1=1
+  `;
+   
   const params = [];
   
   if (food_type) {
