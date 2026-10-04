@@ -46,3 +46,18 @@ CREATE TABLE IF NOT EXISTS donations (
         FOREIGN KEY (recipient_user_id)
         REFERENCES users(user_id)
 );
+
+ CREATE TABLE notifications (
+   notification_id INT AUTO_INCREMENT PRIMARY KEY,
+   user_id INT NOT NULL,
+   donation_id INT,
+   type VARCHAR(50) NOT NULL,
+   message TEXT NOT NULL,
+   status ENUM('UNREAD', 'READ') DEFAULT 'UNREAD',
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ ALTER TABLE donations 
+   ADD COLUMN recipient_user_id INT NULL,
+   ADD COLUMN pickup_confirmed_at DATETIME NULL,
+   ADD COLUMN pickup_confirmed_by INT NULL;
