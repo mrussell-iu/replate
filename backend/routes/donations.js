@@ -1,7 +1,7 @@
 const express = require("express");
 const donationRepository = require("../repositories/donationRepository");
 
-const router = express.Router();(`%&{location}%`)
+const router = express.Router();
 
 /* GET /api/donations
  * Returns currently available donations.*/
@@ -205,7 +205,7 @@ router.put("/api/donations/:id", async (req, res) => {
 });
 
 // Delete Existing Donation Listing
-router.delete("api/donations/:id", async (req, res) => {
+router.delete("/api/donations/:id", async (req, res) => {
 
   try {
     const result = await donationRepository.deleteDonation(req.params.id);
@@ -538,7 +538,7 @@ router.get("/alerts/:user_id", async (req, res) => {
   WHERE n.user_id = ?
   `;
   
-  const parama = [userId];
+  const params = [userId];
   
   if (unread_only === 'true') {
     query += ` AND n.status = 'UNREAD'`;
