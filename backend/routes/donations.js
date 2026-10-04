@@ -102,7 +102,7 @@ router.post("/", async (req, res) => {
 });
 
 // Update Existing Donation Listing
-router.put("/:id", async (req, res) => {
+router.put("/api/donations/:id", async (req, res) => {
   try {
   const donationId = req.params.id;
   const {
@@ -119,12 +119,12 @@ router.put("/:id", async (req, res) => {
 
     const updates = {};`
 
-    if (food_type !== undefined) updates.food_type = food_type;
-    
+    if (food_type !== undefined) {
+    updates.food_type = food_type;
+    }
     if (quantity !== undefined) {
       const numericQuantity = Number(quantity);
-      
-      if (!Number.isFinite(numericQuantity) || numericQuantity <= 0) {
+    if (!Number.isFinite(numericQuantity) || numericQuantity <= 0) {
         return res.status(400).json({
           error: "Quantity must be a positive number."
         });
@@ -133,16 +133,21 @@ router.put("/:id", async (req, res) => {
       updates.quantity = numericQuantity;
     }
 
-    if (quantity_unit !== undefined)
+    if (quantity_unit !== undefined) {
     updates.quantity_unit = quantity_unit;
+    }
     if (pickup_address !== undefined) { 
     updates.pickup_address = pickup_address;
+    }
     if (pickup_date !== undefined) {
     updates.pickup_date = pickup_date;
+    }
     if (pickup_time !== undefined) {
       updates.pickup_time = pickup_time;
+    }
     if (claim_deadline !== undefined) {
       const deadline = new Date(claim_deadline);
+    }
     if (Number.isNaN(deadline.getTime()) || deadline <= new Date()) {
         return res.status(400).json({
           error: "Claim deadline must be in the future."
@@ -157,7 +162,11 @@ router.put("/:id", async (req, res) => {
     }
 
     if (status !== undefined){
-      const vaidStatuses = ["AVAILABLE", "CLAIMED", "COMPLETED"];
+      const vaidStatuses = [
+                "AVAILABLE", 
+                "CLAIMED", 
+                "COMPLETED"
+                ];
     if (!validStatuses.includes(status)){
     return res.status(400).json({
       error:"Status must be one of AVAILABLE, CLAIMED, or COMPLETED."
@@ -196,7 +205,7 @@ router.put("/:id", async (req, res) => {
 });
 
 // Delete Existing Donation Listing
-router.delete("/:id", async (req, res) => {
+router.delete("api/donations/:id", async (req, res) => {
 
   try {
     const result = await donationRepository.deleteDonation(req.params.id);
