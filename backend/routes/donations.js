@@ -23,7 +23,7 @@ router.get("/api/donations", async (req, res) => {
 /* POST /api/donations
  * Creates a new food donation.*/
 
-router.post("/api/donationsa", async (req, res) => {
+router.post("/api/donations", async (req, res) => {
   try {
     const {
       food_type,
@@ -457,7 +457,7 @@ router.get("/history/:user_id", async (req, res) => {
     const userId = req.params.user_id;
     const { role } = req.query;
     
-    let query =
+    let query = `
      SELECT 
        d.donation_id,
        d.food_type,
@@ -475,12 +475,13 @@ router.get("/history/:user_id", async (req, res) => {
     JOIN organizations o ON d.organization_id = o.organization_id
     WHERE o.organization_id IN (
      SELECT organization_id FROM users WHERE user_id = ?
-    );
+    )
+    `;
     
     const params = [userId];
     
     if (role === 'recipient') {
-      query = 
+      query = `
       SELECT 
        d.donation_id,
        d.food_type,
@@ -497,7 +498,7 @@ router.get("/history/:user_id", async (req, res) => {
     FROM donations d
     JOIN organizations o ON d.organization_id = o.organization_id
     WHERE d.recipient_user_id = ?
-    ;
+    `;
     params[0] = userId;
   }
   
