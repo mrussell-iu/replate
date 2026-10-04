@@ -18,7 +18,7 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/users", userRoutes);
-app.use("/api/donations", donationRoutes);
+app.use("/", donationRoutes);
 
 const PORT = process.env.PORT || 3000;
 
