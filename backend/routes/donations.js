@@ -5,7 +5,7 @@ const router = express.Router();
 
 /* GET /api/donations
  * Returns currently available donations.*/
-router.get("/", async (req, res) => {
+router.get("/api/donations", async (req, res) => {
   try {
     const donations = await donationRepository.findAvailable();
 
@@ -23,7 +23,7 @@ router.get("/", async (req, res) => {
 /* POST /api/donations
  * Creates a new food donation.*/
 
-router.post("/", async (req, res) => {
+router.post("/api/donationsa", async (req, res) => {
   try {
     const {
       food_type,
