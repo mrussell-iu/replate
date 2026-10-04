@@ -262,6 +262,7 @@ router.get("/search", async (req, res) => {
   if (location) {
     query += ` AND d.pickup_address LIKE ?`;
     params.push(`%&{location}%`);
+  }
   if (status) {
     query += ` AND d.status = ?`;
     params.push(status);
