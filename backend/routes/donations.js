@@ -91,7 +91,6 @@ router.post("/", async (req, res) => {
       message: "Donation posted successfully.",
       donation_id: donationId
     });
-  }
   } catch (error) {
 /*Error - Unable to save donation*/
     console.error("POST /api/donations failed:", error);
