@@ -1,6 +1,6 @@
 const express = require("express");
 const donationRepository = require("../repositories/donationRepository");
-
+const pool = require("../config/db");
 const router = express.Router();
 
 /* GET /api/donations
@@ -259,11 +259,11 @@ router.get("/search", async (req, res) => {
   
   if (food_type) {
     query += ` AND d.food_type LIKE ?`;
-    params.push(`%&{food_type}%`);
+    params.push(`%${food_type}%`);
     }
   if (location) {
     query += ` AND d.pickup_address LIKE ?`;
-    params.push(`%&{location}%`);
+    params.push(`%${location}%`);
   }
   if (status) {
     query += ` AND d.status = ?`;
@@ -419,7 +419,7 @@ router.post("/:id/confirm-pickup", async (req, res) => {
         }
         
         await connection.query(
-          `UPDATE donations SET status = 'COMPLETED', pickup_comfirmed_at = NOW(), pickup_comfirmed_by = ? WHERE donation_id = ?`,
+          `UPDATE donations SET status = 'COMPLETED', pickup_confirmed_at = NOW(), pickup_comfirmed_by = ? WHERE donation_id = ?`,
           [confirmed_by_user_id, donationId]
           );
           
