@@ -95,7 +95,7 @@ router.post("/api/donations", async (req, res) => {
 /*Error - Unable to save donation*/
     console.error("POST /api/donations failed:", error);
 /* Full Error Message*/
-    console.error("Full error details:", error message);
+    console.error("Full error details:", error.message);
     
     return res.status(500).json({
       error: "Unable to save donation."
