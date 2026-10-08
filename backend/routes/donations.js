@@ -107,6 +107,29 @@ router.post("/api/donations", async (req, res) => {
 router.put("/api/donations/:id", async (req, res) => {
   try {
   const donationId = req.params.id;
+  const requesterOrganizationId = Number(req.body.organization_id);
+  
+  if (!requesterOrganizationId) {
+    return res.status(401).json({
+      error: "Organization ID is required to update a listing."
+      });
+    }
+  
+  const [donationRows] = await pool.query(
+    ` SELECT organization_id, status FROM donations WHERE donation_id = ? `, 
+    [donationId]
+  );
+  
+  if (donationRows.length === 0) {
+    return res.status(404).json({ error: "Donation Listing not found." });
+    }
+    
+    const donation = donationRows[0];
+    
+    if (donation.organization_id !== requesterOrganizationId) {
+      return res.status(403).json({ error: "You do not have permission to update this listing." });
+      }
+        
   const {
     food_type,
     quantity,
@@ -211,7 +234,29 @@ router.delete("/api/donations/:id", async (req, res) => {
 
   try {
     const result = await donationRepository.deleteDonation(req.params.id);
-
+    const requesterOrganizationId = Number(req.body.organization_id);
+    
+    if (!requesterOrganizationId) {
+      return res.status(401).json({
+        error: "Organization ID is required to delete a donation." });
+     } 
+     const [donationRows] = await pool.query(
+      ` SELECT organization_id, status FROM donations WHERE donation_id = ? `, 
+      [donation_id]
+      );
+    
+    if (donationRows.length === 0) {
+      return res.status(404).json({ 
+        error: "Donation listing not found." });
+      }
+     
+    const donation = donationRows[0];
+    
+    if (donation.organization_id !== requesterOrganizationId) {
+      return res.status(403).json({
+        error: "You do not have permission to delete this listing." });
+        }
+        
     if (result === 0) {
       return res.status(404).json({
         error: "Donation listing not found."
@@ -322,7 +367,7 @@ router.post("/:id/claim", async (req, res) => {
           
           await connection.query(
             ` INSERT INTO notifications (user_id, donation_id, type, message, status)
-            SELECT organization_id, ?, 'CLAIM', 'Your donation has been claimed', 'UNREAD'
+            SELECT d.recipient_user_id, ?, 'CLAIM', 'Your donation has been claimed', 'UNREAD'
             FROM donations WHERE donation_id = ?`,
             [donationId, donationId]
             );
@@ -419,7 +464,7 @@ router.post("/:id/confirm-pickup", async (req, res) => {
         }
         
         await connection.query(
-          `UPDATE donations SET status = 'COMPLETED', pickup_confirmed_at = NOW(), pickup_comfirmed_by = ? WHERE donation_id = ?`,
+          `UPDATE donations SET status = 'COMPLETED', pickup_confirmed_at = NOW(), pickup_confirmed_by = ? WHERE donation_id = ?`,
           [confirmed_by_user_id, donationId]
           );
           
