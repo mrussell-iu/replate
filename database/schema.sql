@@ -58,6 +58,5 @@ CREATE TABLE IF NOT EXISTS donations (
 );
 
  ALTER TABLE donations 
-   ADD COLUMN recipient_user_id INT NULL,
    ADD COLUMN pickup_confirmed_at DATETIME NULL,
    ADD COLUMN pickup_confirmed_by INT NULL;
