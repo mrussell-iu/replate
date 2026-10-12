@@ -46,7 +46,18 @@ CREATE TABLE IF NOT EXISTS donations (
         FOREIGN KEY (recipient_user_id)
         REFERENCES users(user_id)
 );
-
+ CREATE TABLE IF NOT EXISTS claims (
+     claim_id INT AUTO_INCREMENT PRIMARY KEY,
+     donation_id INT NOT NULL UNIQUE,
+     recipient_id INT NOT NULL,
+    claimed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    claim_status ENUM('CLAIMED', 'COMPLETED', 'CANCELLED') DEFAULT 'CLAIMED',
+    CONSTRAINT fk_claims_donation FOREIGN KEY (donation_id) 
+        REFERENCES donations(donation_id) ON DELETE CASCADE,
+    CONSTRAINT fk_claims_recipient FOREIGN KEY (recipient_id) 
+        REFERENCES users(user_id) ON DELETE CASCADE 
+);
+     
  CREATE TABLE notifications (
    notification_id INT AUTO_INCREMENT PRIMARY KEY,
    user_id INT NOT NULL,
