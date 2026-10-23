@@ -42,6 +42,40 @@ function App() {
     });
   };
 
+  const handleClaim = async (donationId) => {
+  setError("");
+  setMessage("");
+
+  const recipientUserId = 1; // Replace with your demo recipient's actual user_id
+
+  try {
+    const response = await fetch(
+      `http://localhost:3000/api/donations/${donationId}/claim`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          recipient_user_id: recipientUserId
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to claim donation.");
+    }
+
+    setMessage(data.message);
+    await loadDonations();
+
+  } catch (err) {
+    setError(err.message);
+  }
+};
+  
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -253,6 +287,12 @@ function App() {
             <p>
               Status: {donation.status}
             </p>
+            <button
+  type="button"
+  onClick={() => handleClaim(donation.donation_id)}
+>
+  Claim Donation
+</button>
           </div>
         ))
       )}
