@@ -1,302 +1,344 @@
+
 import { useEffect, useState } from "react";
+import "./App.css";
+
+const API_URL = "http://localhost:3000/api/donations";
+
+const emptyForm = {
+  food_type: "",
+  quantity: "",
+  quantity_unit: "",
+  pickup_address: "",
+  pickup_date: "",
+  pickup_time: "",
+  claim_deadline: "",
+  additional_information: ""
+};
 
 function App() {
-  const [form, setForm] = useState({
-    food_type: "",
-    quantity: "",
-    quantity_unit: "",
-    pickup_address: "",
-    pickup_date: "",
-    pickup_time: "",
-    claim_deadline: "",
-    additional_information: ""
-  });
-
+  const [form, setForm] = useState(emptyForm);
   const [donations, setDonations] = useState([]);
+  const [recipientUserId, setRecipientUserId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [claimingId, setClaimingId] = useState(null);
 
-  const loadDonations = async () => {
+  async function loadDonations() {
     try {
-      const response = await fetch("http://localhost:3000/api/donations");
+      const response = await fetch(API_URL);
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error("Unable to retrieve donations.");
+        throw new Error(
+          data.error || "Unable to retrieve donations."
+        );
       }
 
-      const data = await response.json();
       setDonations(data);
     } catch (err) {
       setError(err.message);
     }
-  };
+  }
 
   useEffect(() => {
     loadDonations();
   }, []);
 
-  const handleChange = (event) => {
-    setForm({
-      ...form,
-      [event.target.name]: event.target.value
-    });
-  };
+  function handleChange(event) {
+    const { name, value } = event.target;
 
-  const handleClaim = async (donationId) => {
-  setError("");
-  setMessage("");
-
-  const recipientUserId = 1; // Replace with your demo recipient's actual user_id
-
-  try {
-    const response = await fetch(
-      `http://localhost:3000/api/donations/${donationId}/claim`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          recipient_user_id: recipientUserId
-        })
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Unable to claim donation.");
-    }
-
-    setMessage(data.message);
-    await loadDonations();
-
-  } catch (err) {
-    setError(err.message);
+    setForm(previous => ({
+      ...previous,
+      [name]: value
+    }));
   }
-};
-  
-  const handleSubmit = async (event) => {
+
+  async function handleSubmit(event) {
     event.preventDefault();
 
     setMessage("");
     setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(form)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Unable to post donation."
+        );
+      }
+
+      setMessage(
+        data.message || "Donation posted successfully."
+      );
+
+      setForm({ ...emptyForm });
+      await loadDonations();
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleClaim(donationId) {
+    setMessage("");
+    setError("");
+
+    const id = Number(donationId);
+    const recipientId = Number(recipientUserId);
+
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      setError("Invalid donation ID.");
+      return;
+    }
+
+    if (
+      !recipientUserId ||
+      !Number.isSafeInteger(recipientId) ||
+      recipientId <= 0
+    ) {
+      setError("Please enter a valid recipient user ID.");
+      return;
+    }
+
+    setClaimingId(id);
 
     try {
       const response = await fetch(
-        "http://localhost:3000/api/donations",
+        `${API_URL}/${id}/claim`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
           },
-          body: JSON.stringify(form)
+          body: JSON.stringify({
+            recipient_user_id: recipientId
+          })
         }
       );
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Unable to post donation.");
+        throw new Error(
+          data.error || "Unable to claim donation."
+        );
       }
 
-      setMessage(data.message);
+      setMessage(
+        data.message || "Donation claimed successfully."
+      );
 
-      setForm({
-        food_type: "",
-        quantity: "",
-        quantity_unit: "",
-        pickup_address: "",
-        pickup_date: "",
-        pickup_time: "",
-        claim_deadline: "",
-        additional_information: ""
-      });
+      await loadDonations();
 
-      loadDonations();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setClaimingId(null);
     }
-  };
+  }
 
   return (
-    <div style={{ maxWidth: "900px", margin: "0 auto", padding: "30px" }}>
-      <h1>Replate</h1>
-      <p>Surplus Food Donation Management System</p>
+    <main className="app">
+      <header>
+        <h1>Replate</h1>
+        <p>Surplus Food Donation Management System</p>
+      </header>
 
-      <hr />
+      <section>
+        <h2>Post a Donation</h2>
 
-      <h2>Post a Donation</h2>
+        <form onSubmit={handleSubmit}>
+          <label>
+            Food Type
+            <select
+              name="food_type"
+              value={form.food_type}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select food type</option>
+              <option value="Prepared Meals">Prepared Meals</option>
+              <option value="Bakery Items">Bakery Items</option>
+              <option value="Fresh Produce">Fresh Produce</option>
+              <option value="Packaged Food">Packaged Food</option>
+            </select>
+          </label>
 
-      <form onSubmit={handleSubmit}>
+          <label>
+            Quantity
+            <input
+              type="number"
+              name="quantity"
+              value={form.quantity}
+              onChange={handleChange}
+              min="0.01"
+              step="0.01"
+              required
+            />
+          </label>
+
+          <label>
+            Unit
+            <select
+              name="quantity_unit"
+              value={form.quantity_unit}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select unit</option>
+              <option value="servings">Servings</option>
+              <option value="lbs">Pounds</option>
+              <option value="boxes">Boxes</option>
+              <option value="items">Items</option>
+            </select>
+          </label>
+
+          <label>
+            Pickup Address
+            <input
+              type="text"
+              name="pickup_address"
+              value={form.pickup_address}
+              onChange={handleChange}
+              required
+            />
+          </label>
+
+          <label>
+            Pickup Date
+            <input
+              type="date"
+              name="pickup_date"
+              value={form.pickup_date}
+              onChange={handleChange}
+              required
+            />
+          </label>
+
+          <label>
+            Pickup Time
+            <input
+              type="time"
+              name="pickup_time"
+              value={form.pickup_time}
+              onChange={handleChange}
+              required
+            />
+          </label>
+
+          <label>
+            Claim Deadline
+            <input
+              type="datetime-local"
+              name="claim_deadline"
+              value={form.claim_deadline}
+              onChange={handleChange}
+              required
+            />
+          </label>
+
+          <label>
+            Additional Information
+            <textarea
+              name="additional_information"
+              value={form.additional_information}
+              onChange={handleChange}
+              rows="3"
+            />
+          </label>
+
+          <button type="submit" disabled={loading}>
+            {loading ? "Posting..." : "Post Donation"}
+          </button>
+        </form>
+      </section>
+
+      <section>
+        <h2>Available Donations</h2>
+
         <label>
-          Food Type
-          <br />
-          <select
-            name="food_type"
-            value={form.food_type}
-            onChange={handleChange}
-          >
-            <option value="">Select food type</option>
-            <option value="Prepared Meals">Prepared Meals</option>
-            <option value="Bakery Items">Bakery Items</option>
-            <option value="Fresh Produce">Fresh Produce</option>
-            <option value="Packaged Food">Packaged Food</option>
-          </select>
-        </label>
-
-        <br /><br />
-
-        <label>
-          Quantity
-          <br />
+          Demo Recipient User ID
           <input
             type="number"
-            name="quantity"
-            value={form.quantity}
-            onChange={handleChange}
             min="1"
+            value={recipientUserId}
+            onChange={event =>
+              setRecipientUserId(event.target.value)
+            }
+            placeholder="Enter recipient user ID"
           />
         </label>
 
-        <br /><br />
+        <div className="donations-list">
+          {donations.length === 0 ? (
+            <p>No donations available.</p>
+          ) : (
+            donations.map(donation => (
+              <article
+                key={donation.donation_id}
+                className="donation-card"
+              >
+                <h3>{donation.food_type}</h3>
 
-        <label>
-          Unit
-          <br />
-          <select
-            name="quantity_unit"
-            value={form.quantity_unit}
-            onChange={handleChange}
-          >
-            <option value="">Select unit</option>
-            <option value="servings">Servings</option>
-            <option value="lbs">Pounds</option>
-            <option value="boxes">Boxes</option>
-            <option value="items">Items</option>
-          </select>
-        </label>
+                <p>
+                  <strong>Donor:</strong>{" "}
+                  {donation.organization_name}
+                </p>
 
-        <br /><br />
+                <p>
+                  <strong>Quantity:</strong>{" "}
+                  {donation.quantity}{" "}
+                  {donation.quantity_unit}
+                </p>
 
-        <label>
-          Pickup Address
-          <br />
-          <input
-            type="text"
-            name="pickup_address"
-            value={form.pickup_address}
-            onChange={handleChange}
-          />
-        </label>
+                <p>
+                  <strong>Pickup:</strong>{" "}
+                  {donation.pickup_address}
+                </p>
 
-        <br /><br />
+                <p>
+                  <strong>Status:</strong>{" "}
+                  {donation.status}
+                </p>
 
-        <label>
-          Pickup Date
-          <br />
-          <input
-            type="date"
-            name="pickup_date"
-            value={form.pickup_date}
-            onChange={handleChange}
-          />
-        </label>
-
-        <br /><br />
-
-        <label>
-          Pickup Time
-          <br />
-          <input
-            type="time"
-            name="pickup_time"
-            value={form.pickup_time}
-            onChange={handleChange}
-          />
-        </label>
-
-        <br /><br />
-
-        <label>
-          Claim Deadline
-          <br />
-          <input
-            type="datetime-local"
-            name="claim_deadline"
-            value={form.claim_deadline}
-            onChange={handleChange}
-          />
-        </label>
-
-        <br /><br />
-
-        <label>
-          Additional Information
-          <br />
-          <textarea
-            name="additional_information"
-            value={form.additional_information}
-            onChange={handleChange}
-          />
-        </label>
-
-        <br /><br />
-
-        <button type="submit">Post Donation</button>
-      </form>
+                <button
+                  type="button"
+                  disabled={claimingId !== null}
+                  onClick={() =>
+                    handleClaim(donation.donation_id)
+                  }
+                >
+                  {claimingId === donation.donation_id
+                    ? "Claiming..."
+                    : "Claim Donation"}
+                </button>
+              </article>
+            ))
+          )}
+        </div>
+      </section>
 
       {message && (
-        <p style={{ marginTop: "20px" }}>
-          {message}
-        </p>
+        <p role="status">{message}</p>
       )}
 
       {error && (
-        <p style={{ marginTop: "20px" }}>
-          Error: {error}
-        </p>
+        <p role="alert">Error: {error}</p>
       )}
-
-      <hr />
-
-      <h2>Available Donations</h2>
-
-      {donations.length === 0 ? (
-        <p>No donations available.</p>
-      ) : (
-        donations.map((donation) => (
-          <div
-            key={donation.donation_id}
-            style={{
-              border: "1px solid #ccc",
-              padding: "15px",
-              marginBottom: "10px"
-            }}
-          >
-            <strong>{donation.food_type}</strong>
-
-            <p>
-              Quantity: {donation.quantity} {donation.quantity_unit}
-            </p>
-
-            <p>
-              Pickup: {donation.pickup_address}
-            </p>
-
-            <p>
-              Status: {donation.status}
-            </p>
-            <button
-  type="button"
-  onClick={() => handleClaim(donation.donation_id)}
->
-  Claim Donation
-</button>
-          </div>
-        ))
-      )}
-    </div>
+    </main>
   );
 }
 
