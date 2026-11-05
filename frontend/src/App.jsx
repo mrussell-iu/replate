@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 
-const API_URL = "http://localhost:3000/api/donations";
+const API_URL = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:3000"}/api/donations`;
 
 const emptyForm = {
   food_type: "",
@@ -154,7 +154,7 @@ function App() {
     <main className="app">
       <header>
         <h1>Replate</h1>
-        <p>Surplus Food Donation Management System</p>
+        <p> Food Surplus Donation Management System</p>
       </header>
 
       <section>
