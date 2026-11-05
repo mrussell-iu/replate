@@ -2,7 +2,16 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 
-const API_URL = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:3000"}/api/donations`;
+// ============================================================
+// API CONFIGURATION
+// ============================================================
+
+const API_BASE = (
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://localhost:3000"
+).replace(/\/+$/, "");
+
+const API_URL = `${API_BASE}/api/donations`;
 
 const emptyForm = {
   food_type: "",
@@ -15,35 +24,78 @@ const emptyForm = {
   additional_information: ""
 };
 
+// ============================================================
+// API RESPONSE HANDLING
+// ============================================================
+
+async function readResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "The server returned an unexpected response. Check the backend URL."
+    );
+  }
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      data.error || `Request failed (${response.status}).`
+    );
+  }
+
+  return data;
+}
+
+// ============================================================
+// REPLATE APPLICATION
+// ============================================================
+
 function App() {
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState({ ...emptyForm });
   const [donations, setDonations] = useState([]);
   const [recipientUserId, setRecipientUserId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [claimingId, setClaimingId] = useState(null);
+  const [loadingDonations, setLoadingDonations] = useState(true);
+
+  // ==========================================================
+  // LOAD AVAILABLE DONATIONS
+  // ==========================================================
 
   async function loadDonations() {
+    setLoadingDonations(true);
+
     try {
       const response = await fetch(API_URL);
-      const data = await response.json();
+      const data = await readResponse(response);
 
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Unable to retrieve donations."
-        );
+      if (!Array.isArray(data)) {
+        throw new Error("Invalid donation data received.");
       }
 
       setDonations(data);
+      return true;
+
     } catch (err) {
       setError(err.message);
+      return false;
+
+    } finally {
+      setLoadingDonations(false);
     }
   }
 
   useEffect(() => {
     loadDonations();
   }, []);
+
+  // ==========================================================
+  // HANDLE FORM INPUT
+  // ==========================================================
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -54,8 +106,14 @@ function App() {
     }));
   }
 
+  // ==========================================================
+  // POST A DONATION
+  // ==========================================================
+
   async function handleSubmit(event) {
     event.preventDefault();
+
+    if (loading) return;
 
     setMessage("");
     setError("");
@@ -70,29 +128,33 @@ function App() {
         body: JSON.stringify(form)
       });
 
-      const data = await response.json();
+      const data = await readResponse(response);
 
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Unable to post donation."
+      setForm({ ...emptyForm });
+
+      const refreshed = await loadDonations();
+
+      if (refreshed) {
+        setMessage(
+          data.message || "Donation posted successfully."
         );
       }
 
-      setMessage(
-        data.message || "Donation posted successfully."
-      );
-
-      setForm({ ...emptyForm });
-      await loadDonations();
-
     } catch (err) {
       setError(err.message);
+
     } finally {
       setLoading(false);
     }
   }
 
+  // ==========================================================
+  // CLAIM A DONATION
+  // ==========================================================
+
   async function handleClaim(donationId) {
+    if (claimingId !== null) return;
+
     setMessage("");
     setError("");
 
@@ -105,7 +167,7 @@ function App() {
     }
 
     if (
-      !recipientUserId ||
+      recipientUserId.trim() === "" ||
       !Number.isSafeInteger(recipientId) ||
       recipientId <= 0
     ) {
@@ -129,32 +191,33 @@ function App() {
         }
       );
 
-      const data = await response.json();
+      const data = await readResponse(response);
 
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Unable to claim donation."
+      const refreshed = await loadDonations();
+
+      if (refreshed) {
+        setMessage(
+          data.message || "Donation claimed successfully."
         );
       }
 
-      setMessage(
-        data.message || "Donation claimed successfully."
-      );
-
-      await loadDonations();
-
     } catch (err) {
       setError(err.message);
+
     } finally {
       setClaimingId(null);
     }
   }
 
+  // ==========================================================
+  // USER INTERFACE
+  // ==========================================================
+
   return (
     <main className="app">
       <header>
         <h1>Replate</h1>
-        <p> Food Surplus Donation Management System</p>
+        <p>Food Surplus Donation Management System</p>
       </header>
 
       <section>
@@ -256,7 +319,7 @@ function App() {
               name="additional_information"
               value={form.additional_information}
               onChange={handleChange}
-              rows="3"
+              rows={3}
             />
           </label>
 
@@ -282,53 +345,57 @@ function App() {
           />
         </label>
 
-        <div className="donations-list">
-          {donations.length === 0 ? (
-            <p>No donations available.</p>
-          ) : (
-            donations.map(donation => (
-              <article
-                key={donation.donation_id}
-                className="donation-card"
-              >
-                <h3>{donation.food_type}</h3>
-
-                <p>
-                  <strong>Donor:</strong>{" "}
-                  {donation.organization_name}
-                </p>
-
-                <p>
-                  <strong>Quantity:</strong>{" "}
-                  {donation.quantity}{" "}
-                  {donation.quantity_unit}
-                </p>
-
-                <p>
-                  <strong>Pickup:</strong>{" "}
-                  {donation.pickup_address}
-                </p>
-
-                <p>
-                  <strong>Status:</strong>{" "}
-                  {donation.status}
-                </p>
-
-                <button
-                  type="button"
-                  disabled={claimingId !== null}
-                  onClick={() =>
-                    handleClaim(donation.donation_id)
-                  }
+        {loadingDonations ? (
+          <p>Loading donations...</p>
+        ) : (
+          <div className="donations-list">
+            {donations.length === 0 ? (
+              <p>No donations available.</p>
+            ) : (
+              donations.map(donation => (
+                <article
+                  key={donation.donation_id}
+                  className="donation-card"
                 >
-                  {claimingId === donation.donation_id
-                    ? "Claiming..."
-                    : "Claim Donation"}
-                </button>
-              </article>
-            ))
-          )}
-        </div>
+                  <h3>{donation.food_type}</h3>
+
+                  <p>
+                    <strong>Donor:</strong>{" "}
+                    {donation.organization_name}
+                  </p>
+
+                  <p>
+                    <strong>Quantity:</strong>{" "}
+                    {donation.quantity}{" "}
+                    {donation.quantity_unit}
+                  </p>
+
+                  <p>
+                    <strong>Pickup:</strong>{" "}
+                    {donation.pickup_address}
+                  </p>
+
+                  <p>
+                    <strong>Status:</strong>{" "}
+                    {donation.status}
+                  </p>
+
+                  <button
+                    type="button"
+                    disabled={claimingId !== null}
+                    onClick={() =>
+                      handleClaim(donation.donation_id)
+                    }
+                  >
+                    {claimingId === donation.donation_id
+                      ? "Claiming..."
+                      : "Claim Donation"}
+                  </button>
+                </article>
+              ))
+            )}
+          </div>
+        )}
       </section>
 
       {message && (
