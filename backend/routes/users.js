@@ -1,9 +1,11 @@
+
 const express = require("express");
-const pool = require("../config/db");
 const bcrypt = require("bcrypt");
+const pool = require("../config/db");
 
 const router = express.Router();
 
+// POST /api/users/register
 router.post("/register", async (req, res) => {
   const {
     organization_name,
@@ -11,13 +13,17 @@ router.post("/register", async (req, res) => {
     address,
     email,
     password
-  } = req.body;
+  } = req.body || {};
 
+  // Validate required fields
   if (
-    !organization_name ||
-    !organization_type ||
-    !address ||
-    !email ||
+    typeof organization_name !== "string" ||
+    !organization_name.trim() ||
+    typeof address !== "string" ||
+    !address.trim() ||
+    typeof email !== "string" ||
+    !email.trim() ||
+    typeof password !== "string" ||
     !password
   ) {
     return res.status(400).json({
@@ -25,12 +31,29 @@ router.post("/register", async (req, res) => {
     });
   }
 
+  // Validate organization type
   if (
     organization_type !== "FOODSERVICE" &&
     organization_type !== "RECIPIENT"
   ) {
     return res.status(400).json({
-      error: "Organization type must be either FOODSERVICE or RECIPIENT."
+      error:
+        "Organization type must be either FOODSERVICE or RECIPIENT."
+    });
+  }
+
+  // Basic email validation
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return res.status(400).json({
+      error: "Please enter a valid email address."
+    });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({
+      error: "Password must contain at least 8 characters."
     });
   }
 
@@ -38,14 +61,16 @@ router.post("/register", async (req, res) => {
 
   try {
     connection = await pool.getConnection();
+
     await connection.beginTransaction();
 
-    const [existingUser] = await connection.query(
+    // Check for duplicate email
+    const [existingUsers] = await connection.execute(
       "SELECT user_id FROM users WHERE email = ?",
-      [email]
+      [normalizedEmail]
     );
 
-    if (existingUser.length > 0) {
+    if (existingUsers.length > 0) {
       await connection.rollback();
 
       return res.status(400).json({
@@ -53,47 +78,69 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash password before storage
+    const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create the organization first.
-    const [organizationResult] = await connection.query(
+    // Create organization
+    const [organizationResult] = await connection.execute(
       `INSERT INTO organizations
         (organization_name, organization_type, address)
        VALUES (?, ?, ?)`,
-      [organization_name, organization_type, address]
+      [
+        organization_name.trim(),
+        organization_type,
+        address.trim()
+      ]
     );
 
     const organizationId = organizationResult.insertId;
 
-    // Determine the user's role from the organization type.
+    // Determine role
     const role =
       organization_type === "FOODSERVICE"
         ? "FOOD_DONOR"
         : "RECIPIENT";
 
-    // Create the user and associate it with the organization.
-    await connection.query(
+    // Create user
+    const [userResult] = await connection.execute(
       `INSERT INTO users
         (organization_id, email, password_hash, role)
        VALUES (?, ?, ?, ?)`,
-      [organizationId, email, hashedPassword, role]
+      [
+        organizationId,
+        normalizedEmail,
+        passwordHash,
+        role
+      ]
     );
 
     await connection.commit();
 
     return res.status(201).json({
-      message: "User registered successfully."
+      message: "User registered successfully.",
+      user_id: userResult.insertId,
+      organization_id: organizationId,
+      role
     });
+
   } catch (error) {
     if (connection) {
       await connection.rollback();
     }
 
-    console.error("Registration Error:", error);
+    // Handle duplicate email race conditions
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(400).json({
+        error: "Email is already in use."
+      });
+    }
+
+    console.error("Registration error:", error);
 
     return res.status(500).json({
-      error: "Internal server error."
+      error: "Unable to register user."
     });
+
   } finally {
     if (connection) {
       connection.release();
@@ -102,4 +149,3 @@ router.post("/register", async (req, res) => {
 });
 
 module.exports = router;
-    

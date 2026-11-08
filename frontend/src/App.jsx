@@ -42,21 +42,34 @@ const emptyRegistration = {
 // ============================================================
 
 async function readResponse(response) {
-  const contentType =
-    response.headers.get("content-type") || "";
+  const contentType = response.headers.get("content-type") || "";
+  let data = null;
 
-  if (!contentType.includes("application/json")) {
+  if (contentType.includes("application/json")) {
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error(
+        `HTTP ${response.status}: Invalid JSON response from the backend.`
+      );
+    }
+  } else {
+    if (!response.ok) {
+      throw new Error(
+        `HTTP ${response.status}: API endpoint unavailable. Check the backend route.`
+      );
+    }
+
     throw new Error(
-      "Unexpected server response. Check the backend connection."
+      `HTTP ${response.status}: Expected JSON but received a different response.`
     );
   }
 
-  const data = await response.json();
-
   if (!response.ok) {
     throw new Error(
-      data.error ||
-      `Request failed with status ${response.status}.`
+      `HTTP ${response.status}: ${
+        data?.error || "The request could not be completed."
+      }`
     );
   }
 

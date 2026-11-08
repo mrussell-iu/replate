@@ -184,10 +184,13 @@ SELECT
     'Reusable test donation for claim testing',
     'AVAILABLE'
 WHERE NOT EXISTS (
-    SELECT 1 FROM donations
+    SELECT 1
+    FROM donations
     WHERE food_type = 'Replate Test Available Meals'
       AND additional_information =
           'Reusable test donation for claim testing'
+      AND status = 'AVAILABLE'
+      AND claim_deadline > NOW()
 );
 
 -- ============================================================

@@ -1,27 +1,41 @@
+
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
-const userRoutes = require("./routes/users");
 const donationRoutes = require("./routes/donations");
+const userRoutes = require("./routes/users");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+// Registration routes
+app.use("/api/users", userRoutes);
+
+// Donation routes — mount exactly once
+app.use("/api/donations", donationRoutes);
+
+// Basic health check
 app.get("/api/health", (req, res) => {
   res.json({
-    status: "ok",
-    message: "Replate backend is running"
+    status: "OK",
+    message: "Replate backend is running."
   });
 });
 
-app.use("/api/users", userRoutes);
-app.use("/", donationRoutes);
+// Unknown API endpoints
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    error: "API endpoint not found."
+  });
+});
 
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT || 3000);
 
 app.listen(PORT, () => {
-  console.log(`Replate backend running on http://localhost:${PORT}`);
+  console.log(
+    `Replate backend running on http://localhost:${PORT}`
+  );
 });

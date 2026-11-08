@@ -4,119 +4,205 @@ const repo = require("../repositories/donationRepository");
 
 const router = express.Router();
 
-// ============================================================
-// HELPER FUNCTIONS
-// ============================================================
+// =====================================================
+// VALIDATION HELPERS
+// =====================================================
 
-const validId = (value) =>
-  Number.isSafeInteger(value) && value > 0;
+const requiredFields = [
+  "food_type",
+  "quantity",
+  "quantity_unit",
+  "pickup_address",
+  "pickup_date",
+  "pickup_time",
+  "claim_deadline"
+];
 
-const nonblank = (value) =>
-  typeof value === "string" && value.trim().length > 0;
+const editableFields = [
+  ...requiredFields,
+  "additional_information"
+];
 
-// Convert HTML datetime-local to MySQL DATETIME.
-// Example: 2026-11-10T14:30 -> 2026-11-10 14:30:00
-
-function mysqlDateTime(value) {
-  if (
-    typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(value)
-  ) {
-    return null;
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return value.replace("T", " ") +
-    (value.length === 16 ? ":00" : "");
+function validId(value) {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0;
 }
 
-// ============================================================
-// DONATION VALIDATION
-// ============================================================
+function nonblank(value) {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0
+  );
+}
 
-function validateDonation(data, partial = false) {
-  const required = [
-    "food_type",
-    "quantity",
-    "quantity_unit",
-    "pickup_address",
-    "pickup_date",
-    "pickup_time",
-    "claim_deadline"
-  ];
-
+function validDate(value) {
   if (
-    !partial &&
-    required.some(
-      key =>
-        data[key] === undefined ||
-        data[key] === null ||
-        data[key] === ""
-    )
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value)
   ) {
-    return "Please complete all required donation fields.";
+    return false;
   }
 
-  for (const key of [
+  const [year, month, day] = value
+    .split("-")
+    .map(Number);
+
+  const date = new Date(year, month - 1, day);
+
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+function validTime(value) {
+  if (
+    typeof value !== "string" ||
+    !/^\d{2}:\d{2}(?::\d{2})?$/.test(value)
+  ) {
+    return false;
+  }
+
+  const [hour, minute, second = 0] = value
+    .split(":")
+    .map(Number);
+
+  return (
+    hour >= 0 &&
+    hour <= 23 &&
+    minute >= 0 &&
+    minute <= 59 &&
+    second >= 0 &&
+    second <= 59
+  );
+}
+
+function parseLocalDateTime(value) {
+  if (typeof value !== "string") return null;
+
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/
+  );
+
+  if (!match) return null;
+
+  const [
+    ,
+    yearText,
+    monthText,
+    dayText,
+    hourText,
+    minuteText,
+    secondText = "00"
+  ] = match;
+
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+
+  const datePart =
+    `${yearText}-${monthText}-${dayText}`;
+
+  const timePart =
+    `${hourText}:${minuteText}:${secondText}`;
+
+  if (
+    !validDate(datePart) ||
+    !validTime(timePart)
+  ) {
+    return null;
+  }
+
+  const date = new Date(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    second
+  );
+
+  return {
+    date,
+    mysql: `${datePart} ${timePart}`
+  };
+}
+
+function validateDonation(data, partial = false) {
+  if (
+    !data ||
+    typeof data !== "object" ||
+    Array.isArray(data)
+  ) {
+    return "Invalid donation information.";
+  }
+
+  if (!partial) {
+    for (const field of requiredFields) {
+      if (
+        data[field] === undefined ||
+        data[field] === null ||
+        data[field] === ""
+      ) {
+        return "Please complete all required donation fields.";
+      }
+    }
+  }
+
+  for (const field of [
     "food_type",
     "quantity_unit",
     "pickup_address"
   ]) {
-    if (key in data && !nonblank(data[key])) {
-      return `${key} cannot be empty.`;
+    if (
+      Object.prototype.hasOwnProperty.call(data, field) &&
+      !nonblank(data[field])
+    ) {
+      return `${field} cannot be empty.`;
     }
   }
 
-  if ("quantity" in data) {
-    const quantity = Number(data.quantity);
-
+  if (
+    Object.prototype.hasOwnProperty.call(data, "quantity")
+  ) {
     if (
       data.quantity === "" ||
       data.quantity === null ||
-      !Number.isFinite(quantity) ||
-      quantity <= 0
+      !Number.isFinite(Number(data.quantity)) ||
+      Number(data.quantity) <= 0
     ) {
       return "Quantity must be a positive number.";
     }
   }
 
-  if ("pickup_date" in data) {
-    if (
-      typeof data.pickup_date !== "string" ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(data.pickup_date)
-    ) {
-      return "Pickup date is invalid.";
-    }
-
-    const date = new Date(`${data.pickup_date}T00:00:00`);
-
-    if (Number.isNaN(date.getTime())) {
-      return "Pickup date is invalid.";
-    }
+  if (
+    Object.prototype.hasOwnProperty.call(data, "pickup_date") &&
+    !validDate(data.pickup_date)
+  ) {
+    return "Pickup date is invalid.";
   }
 
-  if ("pickup_time" in data) {
-    if (
-      typeof data.pickup_time !== "string" ||
-      !/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(
-        data.pickup_time
-      )
-    ) {
-      return "Pickup time is invalid.";
-    }
+  if (
+    Object.prototype.hasOwnProperty.call(data, "pickup_time") &&
+    !validTime(data.pickup_time)
+  ) {
+    return "Pickup time is invalid.";
   }
 
-  if ("claim_deadline" in data) {
-    const formatted = mysqlDateTime(data.claim_deadline);
+  if (
+    Object.prototype.hasOwnProperty.call(data, "claim_deadline")
+  ) {
+    const deadline = parseLocalDateTime(
+      data.claim_deadline
+    );
 
     if (
-      !formatted ||
-      new Date(data.claim_deadline).getTime() <= Date.now()
+      !deadline ||
+      deadline.date.getTime() <= Date.now()
     ) {
       return "Claim deadline must be in the future.";
     }
@@ -125,10 +211,64 @@ function validateDonation(data, partial = false) {
   return null;
 }
 
-// ============================================================
+function normalizeDonation(data) {
+  const normalized = { ...data };
+
+  for (const field of [
+    "food_type",
+    "quantity_unit",
+    "pickup_address"
+  ]) {
+    if (field in normalized) {
+      normalized[field] = normalized[field].trim();
+    }
+  }
+
+  if ("quantity" in normalized) {
+    normalized.quantity = Number(normalized.quantity);
+  }
+
+  if ("claim_deadline" in normalized) {
+    normalized.claim_deadline =
+      parseLocalDateTime(
+        normalized.claim_deadline
+      ).mysql;
+  }
+
+  return normalized;
+}
+
+function validatePickupSchedule(data) {
+  const pickup = parseLocalDateTime(
+    `${data.pickup_date}T${data.pickup_time}`
+  );
+
+  if (!pickup) {
+    return "Pickup date or time is invalid.";
+  }
+
+  if (pickup.date.getTime() <= Date.now()) {
+    return "Pickup date and time must be in the future.";
+  }
+
+  const deadline = parseLocalDateTime(
+    data.claim_deadline
+  );
+
+  if (
+    deadline &&
+    deadline.date.getTime() >= pickup.date.getTime()
+  ) {
+    return "Claim deadline must be before pickup time.";
+  }
+
+  return null;
+}
+
+// =====================================================
 // GET AVAILABLE DONATIONS
 // GET /api/donations
-// ============================================================
+// =====================================================
 
 router.get("/", async (req, res) => {
   try {
@@ -137,7 +277,7 @@ router.get("/", async (req, res) => {
     return res.status(200).json(donations);
 
   } catch (error) {
-    console.error("GET donations failed:", error);
+    console.error("Retrieve donations error:", error);
 
     return res.status(500).json({
       error: "Unable to retrieve donations."
@@ -145,47 +285,39 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ============================================================
+// =====================================================
 // POST DONATION
 // POST /api/donations
-// ============================================================
+// =====================================================
 
 router.post("/", async (req, res) => {
   try {
     const data = req.body || {};
 
-    const problem = validateDonation(data);
+    const validationError = validateDonation(data);
 
-    if (problem) {
+    if (validationError) {
       return res.status(400).json({
-        error: problem
+        error: validationError
       });
     }
 
-    const result = await repo.insertDonation({
-      food_type: data.food_type.trim(),
-      quantity: Number(data.quantity),
-      quantity_unit: data.quantity_unit.trim(),
-      pickup_address: data.pickup_address.trim(),
-      pickup_date: data.pickup_date,
-      pickup_time: data.pickup_time,
-      claim_deadline: mysqlDateTime(data.claim_deadline),
-      additional_information:
-        typeof data.additional_information === "string"
-          ? data.additional_information.trim()
-          : null
-    });
+    const scheduleError = validatePickupSchedule(data);
+
+    if (scheduleError) {
+      return res.status(400).json({
+        error: scheduleError
+      });
+    }
+
+    const normalized = normalizeDonation(data);
+
+    const result = await repo.insertDonation(normalized);
 
     if (result.status === "MISSING_DONOR") {
       return res.status(409).json({
         error:
-          "Demo donor organization missing. Run database/seed.sql."
-      });
-    }
-
-    if (result.status !== "SUCCESS") {
-      return res.status(500).json({
-        error: "Unable to save donation."
+          "Demo donor missing. Run database/seed.sql."
       });
     }
 
@@ -195,7 +327,7 @@ router.post("/", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("POST donation failed:", error);
+    console.error("Post donation error:", error);
 
     return res.status(500).json({
       error: "Unable to save donation."
@@ -203,14 +335,17 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ============================================================
+// =====================================================
 // CLAIM DONATION
 // POST /api/donations/:id/claim
-// ============================================================
+// =====================================================
 
 router.post("/:id/claim", async (req, res) => {
   const donationId = Number(req.params.id);
-  const recipientUserId = Number(req.body?.recipient_user_id);
+
+  const recipientId = Number(
+    req.body?.recipient_user_id
+  );
 
   if (!validId(donationId)) {
     return res.status(400).json({
@@ -218,12 +353,7 @@ router.post("/:id/claim", async (req, res) => {
     });
   }
 
-  if (
-    req.body?.recipient_user_id === undefined ||
-    req.body?.recipient_user_id === null ||
-    req.body?.recipient_user_id === "" ||
-    !validId(recipientUserId)
-  ) {
+  if (!validId(recipientId)) {
     return res.status(400).json({
       error: "A valid recipient user ID is required."
     });
@@ -232,7 +362,7 @@ router.post("/:id/claim", async (req, res) => {
   try {
     const result = await repo.claimDonation(
       donationId,
-      recipientUserId
+      recipientId
     );
 
     if (result.status === "INVALID_RECIPIENT") {
@@ -241,32 +371,21 @@ router.post("/:id/claim", async (req, res) => {
       });
     }
 
-    if (result.status === "NOT_FOUND") {
-      return res.status(404).json({
-        error: "Donation not found."
-      });
-    }
-
     if (result.status === "UNAVAILABLE") {
       return res.status(409).json({
-        error: "This donation is already claimed or expired."
-      });
-    }
-
-    if (result.status !== "SUCCESS") {
-      return res.status(500).json({
-        error: "Unable to claim donation."
+        error:
+          "This donation is already claimed or expired."
       });
     }
 
     return res.status(200).json({
       message: "Donation claimed successfully.",
       donation_id: donationId,
-      recipient_user_id: recipientUserId
+      recipient_user_id: recipientId
     });
 
   } catch (error) {
-    console.error("Claim donation failed:", error);
+    console.error("Claim donation error:", error);
 
     return res.status(500).json({
       error: "Unable to claim donation."
@@ -274,10 +393,10 @@ router.post("/:id/claim", async (req, res) => {
   }
 });
 
-// ============================================================
+// =====================================================
 // EDIT DONATION
 // PUT /api/donations/:id
-// ============================================================
+// =====================================================
 
 router.put("/:id", async (req, res) => {
   const donationId = Number(req.params.id);
@@ -288,27 +407,17 @@ router.put("/:id", async (req, res) => {
     });
   }
 
-  const allowedFields = [
-    "food_type",
-    "quantity",
-    "quantity_unit",
-    "pickup_address",
-    "pickup_date",
-    "pickup_time",
-    "claim_deadline",
-    "additional_information"
-  ];
-
+  const input = req.body || {};
   const updates = {};
 
-  for (const field of allowedFields) {
+  for (const field of editableFields) {
     if (
       Object.prototype.hasOwnProperty.call(
-        req.body || {},
+        input,
         field
       )
     ) {
-      updates[field] = req.body[field];
+      updates[field] = input[field];
     }
   }
 
@@ -318,64 +427,72 @@ router.put("/:id", async (req, res) => {
     });
   }
 
-  const problem = validateDonation(updates, true);
+  const validationError = validateDonation(
+    updates,
+    true
+  );
 
-  if (problem) {
+  if (validationError) {
     return res.status(400).json({
-      error: problem
+      error: validationError
     });
   }
 
-  for (const field of [
-    "food_type",
-    "quantity_unit",
-    "pickup_address"
-  ]) {
-    if (field in updates) {
-      updates[field] = updates[field].trim();
+  // The React edit form submits the full pickup schedule.
+  // Reject partial schedule updates until a read-by-ID
+  // operation is available to validate merged values.
+  const scheduleFields = [
+    "pickup_date",
+    "pickup_time",
+    "claim_deadline"
+  ];
+
+  const providedScheduleFields =
+    scheduleFields.filter(field => field in updates);
+
+  if (
+    providedScheduleFields.length > 0 &&
+    providedScheduleFields.length !== 3
+  ) {
+    return res.status(400).json({
+      error:
+        "Provide pickup date, pickup time, and claim deadline together."
+    });
+  }
+
+  if (providedScheduleFields.length === 3) {
+    const scheduleError =
+      validatePickupSchedule(updates);
+
+    if (scheduleError) {
+      return res.status(400).json({
+        error: scheduleError
+      });
     }
-  }
-
-  if ("quantity" in updates) {
-    updates.quantity = Number(updates.quantity);
-  }
-
-  if ("claim_deadline" in updates) {
-    updates.claim_deadline = mysqlDateTime(
-      updates.claim_deadline
-    );
   }
 
   try {
-    const result = await repo.updateDonation(
+    const normalized = normalizeDonation(updates);
+
+    const updatedCount = await repo.updateDonation(
       donationId,
-      updates
+      normalized
     );
 
-    if (result.status === "NO_FIELDS") {
-      return res.status(400).json({
-        error: "No valid fields provided."
-      });
-    }
-
-    if (result.status === "NOT_FOUND_OR_UNAVAILABLE") {
+    if (!updatedCount) {
       return res.status(404).json({
-        error: "Donation not found or no longer available."
-      });
-    }
-
-    if (result.status !== "SUCCESS") {
-      return res.status(500).json({
-        error: "Unable to update donation."
+        error:
+          "Donation not found, expired, claimed, or outside the demo donor organization."
       });
     }
 
     return res.status(200).json({
-      message: "Donation updated successfully."
+      message: "Donation updated successfully.",
+      donation_id: donationId
     });
 
   } catch (error) {
-    console.error("PUT donation failed:", error);
+    console.error("Edit donation error:", error);
 
     return res.status(500).json({
       error: "Unable to update donation."
