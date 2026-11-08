@@ -221,12 +221,16 @@ function App() {
       });
 
       const data = await readResponse(response);
-
-      setMessage(
-        data.message ||
-        "User registered successfully."
-      );
-
+      
+      if (data.role === "RECIPIENT" && data.user_id) {
+        setRecipientUserId(String(data.user_id));
+        setMessage(
+          `${data.message || "User registered successfully."} Recipient ID ${data.user_id} is ready to use for claiming.`
+          );
+        } else {
+          setMessage(data.message || "User registered successfully.");
+          }
+        
       setRegistration({ ...emptyRegistration });
 
     } catch (err) {
