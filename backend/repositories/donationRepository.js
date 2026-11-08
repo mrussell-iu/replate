@@ -108,9 +108,11 @@ async function insertDonation(data) {
 
 async function claimDonation(donationId, recipientUserId) {
   const connection = await pool.getConnection();
-
+  let transactionStarted = false;
+  
   try {
     await connection.beginTransaction();
+    transactionStarted = true;
 
     // Confirm the recipient account exists.
     const [recipients] = await connection.execute(
@@ -126,6 +128,7 @@ async function claimDonation(donationId, recipientUserId) {
 
     if (recipients.length === 0) {
       await connection.rollback();
+      transactionStarted = false;
 
       return {
         status: "INVALID_RECIPIENT"
@@ -145,6 +148,7 @@ async function claimDonation(donationId, recipientUserId) {
 
     if (updateResult.affectedRows !== 1) {
       await connection.rollback();
+      transactionStarted = false;
 
       return {
         status: "UNAVAILABLE"
@@ -163,6 +167,7 @@ async function claimDonation(donationId, recipientUserId) {
     );
 
     await connection.commit();
+    transactionStarted = false;
 
     return {
       status: "SUCCESS",
@@ -171,7 +176,13 @@ async function claimDonation(donationId, recipientUserId) {
     };
 
   } catch (error) {
+    if (transactionStarted) {
+      try {
     await connection.rollback();
+    } catch (rollbackError) {
+      console.error("Claim rollback error:", rollbackError);
+      }
+    }
     throw error;
 
   } finally {
