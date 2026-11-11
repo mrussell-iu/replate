@@ -43,13 +43,13 @@ Do not commit the `.env` file.
 ## Start Backend
 
 cd backend
-npm install
+npm.cmd install
 node server.js
 
 ## Start Frontend
 
 cd frontend
-npm install
+npm.cmd install
 npm run dev
 
 ## Test the Vertical Slice
