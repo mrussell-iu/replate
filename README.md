@@ -50,7 +50,7 @@ node server.js
 
 cd frontend
 npm.cmd install
-npm run dev
+npm.cmd run dev
 
 ## Test the Vertical Slice
 
