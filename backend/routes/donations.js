@@ -1,503 +1,423 @@
 
 const express = require("express");
 const repo = require("../repositories/donationRepository");
+const {
+  requireAuth,
+  requireRole
+} = require("../middleware/auth");
 
 const router = express.Router();
 
-// =====================================================
-// VALIDATION HELPERS
-// =====================================================
+const validId = id =>
+  Number.isSafeInteger(id) && id > 0;
 
-const requiredFields = [
-  "food_type",
-  "quantity",
-  "quantity_unit",
-  "pickup_address",
-  "pickup_date",
-  "pickup_time",
-  "claim_deadline"
-];
-
-const editableFields = [
-  ...requiredFields,
-  "additional_information"
-];
-
-function validId(value) {
-  const id = Number(value);
-  return Number.isSafeInteger(id) && id > 0;
-}
-
-function nonblank(value) {
-  return (
-    typeof value === "string" &&
-    value.trim().length > 0
-  );
-}
-
-function validDate(value) {
-  if (
-    typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(value)
-  ) {
-    return false;
-  }
-
-  const [year, month, day] = value
-    .split("-")
-    .map(Number);
-
-  const date = new Date(year, month - 1, day);
-
-  return (
-    date.getFullYear() === year &&
-    date.getMonth() === month - 1 &&
-    date.getDate() === day
-  );
-}
-
-function validTime(value) {
-  if (
-    typeof value !== "string" ||
-    !/^\d{2}:\d{2}(?::\d{2})?$/.test(value)
-  ) {
-    return false;
-  }
-
-  const [hour, minute, second = 0] = value
-    .split(":")
-    .map(Number);
-
-  return (
-    hour >= 0 &&
-    hour <= 23 &&
-    minute >= 0 &&
-    minute <= 59 &&
-    second >= 0 &&
-    second <= 59
-  );
-}
+const nonblank = value =>
+  typeof value === "string" && value.trim().length > 0;
 
 function parseLocalDateTime(value) {
   if (typeof value !== "string") return null;
 
   const match = value.match(
-    /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/
+    /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::(\d{2}))?$/
   );
-
   if (!match) return null;
 
-  const [
-    ,
-    yearText,
-    monthText,
-    dayText,
-    hourText,
-    minuteText,
-    secondText = "00"
-  ] = match;
+  const date = match[1];
+  const time = `${match[2]}:${match[3] || "00"}`;
+  const parsed = new Date(`${date}T${time}`);
 
-  const year = Number(yearText);
-  const month = Number(monthText);
-  const day = Number(dayText);
-  const hour = Number(hourText);
-  const minute = Number(minuteText);
-  const second = Number(secondText);
+  if (Number.isNaN(parsed.getTime())) return null;
 
-  const datePart =
-    `${yearText}-${monthText}-${dayText}`;
+  const pad = n => String(n).padStart(2, "0");
+  const actualDate = [
+    parsed.getFullYear(),
+    pad(parsed.getMonth() + 1),
+    pad(parsed.getDate())
+  ].join("-");
+  const actualTime = [
+    pad(parsed.getHours()),
+    pad(parsed.getMinutes()),
+    pad(parsed.getSeconds())
+  ].join(":");
 
-  const timePart =
-    `${hourText}:${minuteText}:${secondText}`;
-
-  if (
-    !validDate(datePart) ||
-    !validTime(timePart)
-  ) {
-    return null;
-  }
-
-  const date = new Date(
-    year,
-    month - 1,
-    day,
-    hour,
-    minute,
-    second
-  );
+  if (actualDate !== date || actualTime !== time) return null;
 
   return {
-    date,
-    mysql: `${datePart} ${timePart}`
+    timestamp: parsed.getTime(),
+    mysql: `${date} ${time}`
   };
 }
 
 function validateDonation(data, partial = false) {
-  if (
-    !data ||
-    typeof data !== "object" ||
-    Array.isArray(data)
-  ) {
-    return "Invalid donation information.";
-  }
-
-  if (!partial) {
-    for (const field of requiredFields) {
-      if (
-        data[field] === undefined ||
-        data[field] === null ||
-        data[field] === ""
-      ) {
-        return "Please complete all required donation fields.";
-      }
-    }
-  }
-
-  for (const field of [
-    "food_type",
-    "quantity_unit",
-    "pickup_address"
-  ]) {
-    if (
-      Object.prototype.hasOwnProperty.call(data, field) &&
-      !nonblank(data[field])
-    ) {
-      return `${field} cannot be empty.`;
-    }
-  }
-
-  if (
-    Object.prototype.hasOwnProperty.call(data, "quantity")
-  ) {
-    if (
-      data.quantity === "" ||
-      data.quantity === null ||
-      !Number.isFinite(Number(data.quantity)) ||
-      Number(data.quantity) <= 0
-    ) {
-      return "Quantity must be a positive number.";
-    }
-  }
-
-  if (
-    Object.prototype.hasOwnProperty.call(data, "pickup_date") &&
-    !validDate(data.pickup_date)
-  ) {
-    return "Pickup date is invalid.";
-  }
-
-  if (
-    Object.prototype.hasOwnProperty.call(data, "pickup_time") &&
-    !validTime(data.pickup_time)
-  ) {
-    return "Pickup time is invalid.";
-  }
-
-  if (
-    Object.prototype.hasOwnProperty.call(data, "claim_deadline")
-  ) {
-    const deadline = parseLocalDateTime(
-      data.claim_deadline
-    );
-
-    if (
-      !deadline ||
-      deadline.date.getTime() <= Date.now()
-    ) {
-      return "Claim deadline must be in the future.";
-    }
-  }
-
-  return null;
-}
-
-function normalizeDonation(data) {
-  const normalized = { ...data };
-
-  for (const field of [
-    "food_type",
-    "quantity_unit",
-    "pickup_address"
-  ]) {
-    if (field in normalized) {
-      normalized[field] = normalized[field].trim();
-    }
-  }
-
-  if ("quantity" in normalized) {
-    normalized.quantity = Number(normalized.quantity);
-  }
-
-  if ("claim_deadline" in normalized) {
-    normalized.claim_deadline =
-      parseLocalDateTime(
-        normalized.claim_deadline
-      ).mysql;
-  }
-
-  return normalized;
-}
-
-function validatePickupSchedule(data) {
-  const pickup = parseLocalDateTime(
-    `${data.pickup_date}T${data.pickup_time}`
-  );
-
-  if (!pickup) {
-    return "Pickup date or time is invalid.";
-  }
-
-  if (pickup.date.getTime() <= Date.now()) {
-    return "Pickup date and time must be in the future.";
-  }
-
-  const deadline = parseLocalDateTime(
-    data.claim_deadline
-  );
-
-  if (
-    deadline &&
-    deadline.date.getTime() >= pickup.date.getTime()
-  ) {
-    return "Claim deadline must be before pickup time.";
-  }
-
-  return null;
-}
-
-// =====================================================
-// GET AVAILABLE DONATIONS
-// GET /api/donations
-// =====================================================
-
-router.get("/", async (req, res) => {
-  try {
-    const donations = await repo.findAvailable();
-
-    return res.status(200).json(donations);
-
-  } catch (error) {
-    console.error("Retrieve donations error:", error);
-
-    return res.status(500).json({
-      error: "Unable to retrieve donations."
-    });
-  }
-});
-
-// =====================================================
-// POST DONATION
-// POST /api/donations
-// =====================================================
-
-router.post("/", async (req, res) => {
-  try {
-    const data = req.body || {};
-
-    const validationError = validateDonation(data);
-
-    if (validationError) {
-      return res.status(400).json({
-        error: validationError
-      });
-    }
-
-    const scheduleError = validatePickupSchedule(data);
-
-    if (scheduleError) {
-      return res.status(400).json({
-        error: scheduleError
-      });
-    }
-
-    const normalized = normalizeDonation(data);
-
-    const result = await repo.insertDonation(normalized);
-
-    if (result.status === "MISSING_DONOR") {
-      return res.status(409).json({
-        error:
-          "Demo donor missing. Run database/seed.sql."
-      });
-    }
-
-    return res.status(201).json({
-      message: "Donation posted successfully.",
-      donation_id: result.donation_id
-    });
-
-  } catch (error) {
-    console.error("Post donation error:", error);
-
-    return res.status(500).json({
-      error: "Unable to save donation."
-    });
-  }
-});
-
-// =====================================================
-// CLAIM DONATION
-// POST /api/donations/:id/claim
-// =====================================================
-
-router.post("/:id/claim", async (req, res) => {
-  const donationId = Number(req.params.id);
-
-  const recipientId = Number(
-    req.body?.recipient_user_id
-  );
-
-  if (!validId(donationId)) {
-    return res.status(400).json({
-      error: "Invalid donation ID."
-    });
-  }
-
-  if (!validId(recipientId)) {
-    return res.status(400).json({
-      error: "A valid recipient user ID is required."
-    });
-  }
-
-  try {
-    const result = await repo.claimDonation(
-      donationId,
-      recipientId
-    );
-
-    if (result.status === "INVALID_RECIPIENT") {
-      return res.status(400).json({
-        error: "Recipient account not found."
-      });
-    }
-
-    if (result.status === "UNAVAILABLE") {
-      return res.status(409).json({
-        error:
-          "This donation is already claimed or expired."
-      });
-    }
-
-    return res.status(200).json({
-      message: "Donation claimed successfully.",
-      donation_id: donationId,
-      recipient_user_id: recipientId
-    });
-
-  } catch (error) {
-    console.error("Claim donation error:", error);
-
-    return res.status(500).json({
-      error: "Unable to claim donation."
-    });
-  }
-});
-
-// =====================================================
-// EDIT DONATION
-// PUT /api/donations/:id
-// =====================================================
-
-router.put("/:id", async (req, res) => {
-  const donationId = Number(req.params.id);
-
-  if (!validId(donationId)) {
-    return res.status(400).json({
-      error: "Invalid donation ID."
-    });
-  }
-
-  const input = req.body || {};
-  const updates = {};
-
-  for (const field of editableFields) {
-    if (
-      Object.prototype.hasOwnProperty.call(
-        input,
-        field
-      )
-    ) {
-      updates[field] = input[field];
-    }
-  }
-
-  if (Object.keys(updates).length === 0) {
-    return res.status(400).json({
-      error: "No valid fields provided."
-    });
-  }
-
-  const validationError = validateDonation(
-    updates,
-    true
-  );
-
-  if (validationError) {
-    return res.status(400).json({
-      error: validationError
-    });
-  }
-
-  // The React edit form submits the full pickup schedule.
-  // Reject partial schedule updates until a read-by-ID
-  // operation is available to validate merged values.
-  const scheduleFields = [
-    "pickup_date",
-    "pickup_time",
+  const required = [
+    "food_type", "quantity", "quantity_unit",
+    "pickup_address", "pickup_date", "pickup_time",
     "claim_deadline"
   ];
 
-  const providedScheduleFields =
-    scheduleFields.filter(field => field in updates);
+  if (!partial && required.some(k =>
+    data[k] === undefined || data[k] === null || data[k] === ""
+  )) return "Please complete all required donation fields.";
 
-  if (
-    providedScheduleFields.length > 0 &&
-    providedScheduleFields.length !== 3
-  ) {
-    return res.status(400).json({
-      error:
-        "Provide pickup date, pickup time, and claim deadline together."
-    });
+  for (const key of [
+    "food_type", "quantity_unit", "pickup_address"
+  ]) {
+    if (key in data && !nonblank(data[key]))
+      return `${key} cannot be empty.`;
   }
 
-  if (providedScheduleFields.length === 3) {
-    const scheduleError =
-      validatePickupSchedule(updates);
-
-    if (scheduleError) {
-      return res.status(400).json({
-        error: scheduleError
-      });
-    }
+  if ("quantity" in data &&
+      (data.quantity === "" || data.quantity === null ||
+       !Number.isFinite(Number(data.quantity)) ||
+       Number(data.quantity) <= 0 ||
+       Number(data.quantity) > 99999999.99)) {
+    return "Quantity must be a positive number.";
   }
 
+  if ("pickup_date" in data &&
+      (typeof data.pickup_date !== "string" ||
+       !/^\d{4}-\d{2}-\d{2}$/.test(data.pickup_date))) {
+    return "Pickup date is invalid.";
+  }
+
+  if ("pickup_time" in data &&
+      (typeof data.pickup_time !== "string" ||
+       !/^\d{2}:\d{2}(?::\d{2})?$/.test(data.pickup_time))) {
+    return "Pickup time is invalid.";
+  }
+
+  if ("claim_deadline" in data) {
+    const deadline = parseLocalDateTime(data.claim_deadline);
+    if (!deadline || deadline.timestamp <= Date.now())
+      return "Claim deadline must be in the future.";
+  }
+
+  if ("additional_information" in data &&
+      data.additional_information !== null &&
+      typeof data.additional_information !== "string") {
+    return "Additional information must be text.";
+  }
+
+  return null;
+}
+
+function validateSchedule(data) {
+  const pickup = parseLocalDateTime(
+    `${data.pickup_date}T${data.pickup_time}`
+  );
+  const deadline = parseLocalDateTime(data.claim_deadline);
+
+  if (!pickup || !deadline)
+    return "Pickup schedule is invalid.";
+
+  if (pickup.timestamp <= Date.now())
+    return "Pickup date and time must be in the future.";
+
+  if (deadline.timestamp <= Date.now())
+    return "Claim deadline must be in the future.";
+
+  if (deadline.timestamp >= pickup.timestamp)
+    return "Claim deadline must be before pickup.";
+
+  return null;
+}
+
+function normalize(data) {
+  const result = { ...data };
+
+  for (const key of [
+    "food_type", "quantity_unit", "pickup_address"
+  ]) {
+    if (key in result) result[key] = result[key].trim();
+  }
+
+  if ("quantity" in result)
+    result.quantity = Number(result.quantity);
+
+  if ("claim_deadline" in result)
+    result.claim_deadline =
+      parseLocalDateTime(result.claim_deadline).mysql;
+
+  return result;
+}
+
+function errorResponse(res, error, label, message) {
+  console.error(label, error);
+  return res.status(500).json({ error: message });
+}
+
+// ============================================================
+// AVAILABLE DONATIONS — AUTHENTICATED USERS
+// ============================================================
+
+router.get("/", requireAuth, async (req, res) => {
   try {
-    const normalized = normalizeDonation(updates);
-
-    const updatedCount = await repo.updateDonation(
-      donationId,
-      normalized
+    return res.json(await repo.findAvailable());
+  } catch (err) {
+    return errorResponse(
+      res, err, "List donations:",
+      "Unable to retrieve donations."
     );
-
-    if (!updatedCount) {
-      return res.status(404).json({
-        error:
-          "Donation not found, expired, claimed, or outside the demo donor organization."
-      });
-    }
-
-    return res.status(200).json({
-      message: "Donation updated successfully.",
-      donation_id: donationId
-    });
-
-  } catch (error) {
-    console.error("Edit donation error:", error);
-
-    return res.status(500).json({
-      error: "Unable to update donation."
-    });
   }
 });
+
+// ============================================================
+// RECIPIENT CLAIMS AND PICKUP HISTORY
+// Important: place before routes using /:id.
+// ============================================================
+
+router.get(
+  "/my-claims",
+  requireRole("RECIPIENT"),
+  async (req, res) => {
+    try {
+      const rows = await repo.findRecipientDonations(
+        Number(req.session.user.user_id)
+      );
+      return res.json(rows);
+    } catch (err) {
+      return errorResponse(
+        res, err, "Recipient history:",
+        "Unable to retrieve claimed donations."
+      );
+    }
+  }
+);
+
+// ============================================================
+// POST DONATION — FOOD DONOR ONLY
+// ============================================================
+
+router.post(
+  "/",
+  requireRole("FOOD_DONOR"),
+  async (req, res) => {
+    const data = req.body || {};
+    const problem = validateDonation(data);
+
+    if (problem)
+      return res.status(400).json({ error: problem });
+
+    const scheduleProblem = validateSchedule(data);
+    if (scheduleProblem)
+      return res.status(400).json({ error: scheduleProblem });
+
+    try {
+      const result = await repo.insertDonation(
+        normalize({
+          food_type: data.food_type,
+          quantity: data.quantity,
+          quantity_unit: data.quantity_unit,
+          pickup_address: data.pickup_address,
+          pickup_date: data.pickup_date,
+          pickup_time: data.pickup_time,
+          claim_deadline: data.claim_deadline,
+          additional_information:
+            data.additional_information || null
+        }),
+        Number(req.session.user.organization_id)
+      );
+
+      if (result.status !== "SUCCESS")
+        return res.status(403).json({
+          error: "Invalid donor organization."
+        });
+
+      return res.status(201).json({
+        message: "Donation posted successfully.",
+        donation_id: result.donation_id,
+        organization_id: result.organization_id
+      });
+    } catch (err) {
+      return errorResponse(
+        res, err, "Post donation:",
+        "Unable to save donation."
+      );
+    }
+  }
+);
+
+// ============================================================
+// CLAIM — AUTHENTICATED RECIPIENT ONLY
+// ============================================================
+
+router.post(
+  "/:id/claim",
+  requireRole("RECIPIENT"),
+  async (req, res) => {
+    const id = Number(req.params.id);
+    if (!validId(id))
+      return res.status(400).json({
+        error: "Invalid donation ID."
+      });
+
+    try {
+      const result = await repo.claimDonation(
+        id, Number(req.session.user.user_id)
+      );
+
+      if (result.status === "INVALID_RECIPIENT")
+        return res.status(403).json({
+          error: "Invalid recipient account."
+        });
+
+      if (result.status === "UNAVAILABLE")
+        return res.status(409).json({
+          error: "This donation is already claimed or expired."
+        });
+
+      return res.json({
+        message: "Donation claimed successfully.",
+        donation_id: id,
+        recipient_user_id: result.recipient_user_id
+      });
+    } catch (err) {
+      return errorResponse(
+        res, err, "Claim donation:",
+        "Unable to claim donation."
+      );
+    }
+  }
+);
+
+// ============================================================
+// CONFIRM PICKUP — CLAIMING RECIPIENT ONLY
+// ============================================================
+
+router.post(
+  "/:id/confirm-pickup",
+  requireRole("RECIPIENT"),
+  async (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!validId(id))
+      return res.status(400).json({
+        error: "Invalid donation ID."
+      });
+
+    try {
+      const result = await repo.confirmPickup(
+        id, Number(req.session.user.user_id)
+      );
+
+      if (result.status === "NOT_FOUND")
+        return res.status(404).json({
+          error: "Donation not found."
+        });
+
+      if (result.status === "FORBIDDEN")
+        return res.status(403).json({
+          error: "You cannot confirm another recipient's pickup."
+        });
+
+      if (result.status === "INVALID_STATE")
+        return res.status(409).json({
+          error: "Pickup cannot be confirmed for this donation."
+        });
+
+      return res.json({
+        message: "Pickup confirmed successfully.",
+        donation_id: id,
+        status: "COMPLETED",
+        pickup_confirmed_by: result.pickup_confirmed_by
+      });
+    } catch (err) {
+      return errorResponse(
+        res, err, "Confirm pickup:",
+        "Unable to confirm pickup."
+      );
+    }
+  }
+);
+
+// ============================================================
+// EDIT — DONATION OWNER ONLY
+// ============================================================
+
+router.put(
+  "/:id",
+  requireRole("FOOD_DONOR"),
+  async (req, res) => {
+    const id = Number(req.params.id);
+
+    if (!validId(id))
+      return res.status(400).json({
+        error: "Invalid donation ID."
+      });
+
+    const allowed = [
+      "food_type", "quantity", "quantity_unit",
+      "pickup_address", "pickup_date", "pickup_time",
+      "claim_deadline", "additional_information"
+    ];
+
+    const updates = {};
+    for (const key of allowed) {
+      if (Object.prototype.hasOwnProperty.call(
+        req.body || {}, key
+      )) updates[key] = req.body[key];
+    }
+
+    if (!Object.keys(updates).length)
+      return res.status(400).json({
+        error: "No valid fields provided."
+      });
+
+    const problem = validateDonation(updates, true);
+    if (problem)
+      return res.status(400).json({ error: problem });
+
+    const organizationId =
+      Number(req.session.user.organization_id);
+
+    try {
+      const existing = await repo.findDonationForEdit(
+        id, organizationId
+      );
+
+      if (!existing)
+        return res.status(404).json({
+          error: "Donation not found or you are not authorized to edit it."
+        });
+
+      // Requires dateStrings: true in MySQL pool configuration.
+      const combined = {
+        ...existing,
+        ...updates,
+        pickup_date:
+          updates.pickup_date ?? existing.pickup_date,
+        pickup_time:
+          updates.pickup_time ?? existing.pickup_time,
+        claim_deadline:
+          updates.claim_deadline ?? existing.claim_deadline
+      };
+
+      const scheduleProblem = validateSchedule(combined);
+      if (scheduleProblem)
+        return res.status(400).json({
+          error: scheduleProblem
+        });
+
+      const result = await repo.updateDonation(
+        id, normalize(updates), organizationId
+      );
+
+      if (result.status !== "SUCCESS")
+        return res.status(404).json({
+          error: "Donation not found or no longer editable."
+        });
+
+      return res.json({
+        message: "Donation updated successfully.",
+        donation_id: id
+      });
+    } catch (err) {
+      return errorResponse(
+        res, err, "Edit donation:",
+        "Unable to update donation."
+      );
+    }
+  }
+);
 
 module.exports = router;

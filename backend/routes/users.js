@@ -1,4 +1,5 @@
 
+const bcrypt = require("bcrypt");
 const express = require("express");
 const userRepository = require("../repositories/userRepository");
 
@@ -10,6 +11,111 @@ function nonblank(value) {
     value.trim().length > 0
   );
 }
+
+
+const loginAttempts = new Map();
+
+router.post("/login", async (req, res) => {
+  const email =
+    typeof req.body?.email === "string"
+      ? req.body.email.trim().toLowerCase()
+      : "";
+
+  const password = req.body?.password;
+
+  if (!email || typeof password !== "string" || !password) {
+    return res.status(400).json({
+      error: "Email and password are required."
+    });
+  }
+
+  try {
+    const user = await userRepository.findUserByEmail(email);
+
+    const validPassword = user
+      ? await bcrypt.compare(password, user.password_hash)
+      : false;
+
+    if (!user || !validPassword) {
+      return res.status(401).json({
+        error: "Invalid email or password."
+      });
+    }
+
+    // Regenerate the session to prevent session fixation.
+    req.session.regenerate(error => {
+      if (error) {
+        console.error("Session regeneration failed:", error);
+        return res.status(500).json({
+          error: "Unable to start login session."
+        });
+      }
+
+      req.session.user = {
+        user_id: user.user_id,
+        organization_id: user.organization_id,
+        email: user.email,
+        role: user.role,
+        organization_name: user.organization_name
+      };
+
+      req.session.save(error => {
+        if (error) {
+          console.error("Session save failed:", error);
+          return res.status(500).json({
+            error: "Unable to save login session."
+          });
+        }
+
+        return res.json({
+          message: "Login successful.",
+          user: req.session.user
+        });
+      });
+    });
+
+  } catch (error) {
+    console.error("Login error:", error);
+    return res.status(500).json({
+      error: "Unable to log in."
+    });
+  }
+});
+
+router.get("/me", (req, res) => {
+  if (!req.session?.user) {
+    return res.status(401).json({
+      error: "Not logged in."
+    });
+  }
+
+  return res.json({
+    user: req.session.user
+  });
+});
+
+router.post("/logout", (req, res) => {
+  req.session.destroy(error => {
+    if (error) {
+      console.error("Logout error:", error);
+      return res.status(500).json({
+        error: "Unable to log out."
+      });
+    }
+
+    res.clearCookie("replate.sid", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/"
+    });
+
+    return res.json({
+      message: "Logged out successfully."
+    });
+  });
+});
+
 
 // POST /api/users/register
 router.post("/register", async (req, res) => {
