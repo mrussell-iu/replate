@@ -106,6 +106,30 @@ async function registerUser(data) {
   }
 }
 
+
+async function findUserByEmail(email) {
+  const [rows] = await pool.execute(
+    `SELECT
+       u.user_id,
+       u.organization_id,
+       u.email,
+       u.password_hash,
+       u.role,
+       o.organization_name,
+       o.organization_type
+     FROM users u
+     INNER JOIN organizations o
+       ON o.organization_id = u.organization_id
+     WHERE u.email = ?
+     LIMIT 1`,
+    [email]
+  );
+
+  return rows.length ? rows[0] : null;
+}
+
+
 module.exports = {
-  registerUser
+  registerUser,
+  findUserByEmail
 };
