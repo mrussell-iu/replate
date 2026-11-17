@@ -1,37 +1,42 @@
 
 const express = require("express");
-const bcrypt = require("bcrypt");
-const pool = require("../config/db");
+const userRepository = require("../repositories/userRepository");
 
 const router = express.Router();
 
+function nonblank(value) {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0
+  );
+}
+
 // POST /api/users/register
 router.post("/register", async (req, res) => {
+  const data = req.body || {};
+
   const {
     organization_name,
     organization_type,
     address,
     email,
     password
-  } = req.body || {};
+  } = data;
 
-  // Validate required fields
+  // Validate required fields.
   if (
-    typeof organization_name !== "string" ||
-    !organization_name.trim() ||
-    typeof address !== "string" ||
-    !address.trim() ||
-    typeof email !== "string" ||
-    !email.trim() ||
-    typeof password !== "string" ||
-    !password
+    !nonblank(organization_name) ||
+    !nonblank(organization_type) ||
+    !nonblank(address) ||
+    !nonblank(email) ||
+    !nonblank(password)
   ) {
     return res.status(400).json({
       error: "All fields are required."
     });
   }
 
-  // Validate organization type
+  // Validate organization type.
   if (
     organization_type !== "FOODSERVICE" &&
     organization_type !== "RECIPIENT"
@@ -42,7 +47,7 @@ router.post("/register", async (req, res) => {
     });
   }
 
-  // Basic email validation
+  // Basic email validation.
   const normalizedEmail = email.trim().toLowerCase();
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
@@ -57,94 +62,34 @@ router.post("/register", async (req, res) => {
     });
   }
 
-  let connection;
-
   try {
-    connection = await pool.getConnection();
+    const result = await userRepository.registerUser({
+      organization_name: organization_name.trim(),
+      organization_type,
+      address: address.trim(),
+      email: normalizedEmail,
+      password
+    });
 
-    await connection.beginTransaction();
-
-    // Check for duplicate email
-    const [existingUsers] = await connection.execute(
-      "SELECT user_id FROM users WHERE email = ?",
-      [normalizedEmail]
-    );
-
-    if (existingUsers.length > 0) {
-      await connection.rollback();
-
+    if (result.status === "DUPLICATE_EMAIL") {
       return res.status(400).json({
         error: "Email is already in use."
       });
     }
-
-    // Hash password before storage
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    // Create organization
-    const [organizationResult] = await connection.execute(
-      `INSERT INTO organizations
-        (organization_name, organization_type, address)
-       VALUES (?, ?, ?)`,
-      [
-        organization_name.trim(),
-        organization_type,
-        address.trim()
-      ]
-    );
-
-    const organizationId = organizationResult.insertId;
-
-    // Determine role
-    const role =
-      organization_type === "FOODSERVICE"
-        ? "FOOD_DONOR"
-        : "RECIPIENT";
-
-    // Create user
-    const [userResult] = await connection.execute(
-      `INSERT INTO users
-        (organization_id, email, password_hash, role)
-       VALUES (?, ?, ?, ?)`,
-      [
-        organizationId,
-        normalizedEmail,
-        passwordHash,
-        role
-      ]
-    );
-
-    await connection.commit();
 
     return res.status(201).json({
       message: "User registered successfully.",
-      user_id: userResult.insertId,
-      organization_id: organizationId,
-      role
+      user_id: result.user_id,
+      organization_id: result.organization_id,
+      role: result.role
     });
 
   } catch (error) {
-    if (connection) {
-      await connection.rollback();
-    }
-
-    // Handle duplicate email race conditions
-    if (error.code === "ER_DUP_ENTRY") {
-      return res.status(400).json({
-        error: "Email is already in use."
-      });
-    }
-
-    console.error("Registration error:", error);
+    console.error("Registration Error:", error);
 
     return res.status(500).json({
-      error: "Unable to register user."
+      error: "Internal server error."
     });
-
-  } finally {
-    if (connection) {
-      connection.release();
-    }
   }
 });
 
