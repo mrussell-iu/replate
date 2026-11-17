@@ -87,6 +87,84 @@ body {
   box-shadow: 0 8px 28px rgba(25, 70, 45, 0.055);
 }
 
+
+/* ==========================================
+   REPLATE AUTHENTICATION AND DASHBOARD
+   ========================================== */
+
+.auth-tabs {
+  display: flex;
+  gap: 12px;
+  margin: 24px 0;
+  padding-bottom: 18px;
+  border-bottom: 2px solid #e4f0e8;
+}
+
+.app .auth-tabs button {
+  flex: 1;
+  background: #eaf3ed;
+  color: #24563b;
+  border: 1px solid #d5e6da;
+}
+
+.app .auth-tabs button.active {
+  background: #23734d;
+  color: #ffffff;
+  border-color: #23734d;
+}
+
+.app .text-button {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  color: #23734d;
+  font-weight: 700;
+  text-decoration: underline;
+  box-shadow: none;
+}
+
+.app .text-button:hover:not(:disabled) {
+  background: transparent;
+  color: #174b36;
+  box-shadow: none;
+  transform: none;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.dashboard-header h2 {
+  margin-bottom: 8px;
+}
+
+.dashboard-header p {
+  margin: 0;
+  color: #607669;
+}
+
+@media (max-width: 700px) {
+  .dashboard-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dashboard-header button {
+    width: 100%;
+  }
+
+  .auth-tabs {
+    flex-direction: row;
+  }
+}
+
 /* HORIZONTAL DIVIDER BETWEEN SECTIONS */
 
 .app > section + section::before {
